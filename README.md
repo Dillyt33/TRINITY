@@ -1,6 +1,6 @@
 # Project Trinity
 
-A time-blocking app that keeps you on track. It runs as one installable app on your iPhone and your Mac, and syncs between them. An AI coach is on the way.
+Trinity is a personal AI assistant that runs your schedule and keeps you on track. This repo is her home: an installable time-blocking app for iPhone and Mac that syncs between them. Her voice, notifications and phone actions are on the way.
 
 ## What works today (phase 1)
 
@@ -65,4 +65,4 @@ docs/PLAN.md            roadmap and decisions
 docs/SETUP.md           API key, Firebase, deploy, install
 ```
 
-Roadmap: notifications (phase 2), week view and templates (phase 3), the AI coach (phase 4), Claude/Siri integration (phase 5). Details in [docs/PLAN.md](docs/PLAN.md).
+Roadmap and build order: [docs/ASSISTANT-PLAN.md](docs/ASSISTANT-PLAN.md). Use Trinity on your iPhone today: [docs/PHONE-SETUP.md](docs/PHONE-SETUP.md).

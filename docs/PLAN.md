@@ -4,6 +4,8 @@ A time-blocking app with an AI coach that keeps you on track. It's one installab
 
 Concept mockups: https://claude.ai/artifact/6Fpr2gprsuVvDJEaNj3eZr
 
+> **Update:** Trinity is one assistant, not an app with a separate "coach". The build order from here on is in **[ASSISTANT-PLAN.md](ASSISTANT-PLAN.md)**, which replaces phases 2–6 below. The notes below still describe how notifications and the assistant's brain will work.
+
 ## Decisions so far
 
 | Topic | Decision |
@@ -11,8 +13,8 @@ Concept mockups: https://claude.ai/artifact/6Fpr2gprsuVvDJEaNj3eZr
 | App type | Installable web app (PWA): iPhone Home Screen and Mac Dock. Native wrapper later if wanted |
 | Sync | Firebase (Google sign-in + Firestore), under your Google account |
 | Google Calendar | Not needed |
-| Coach tone | Direct, some tough love, some warmth |
-| Coach voice | Female |
+| Assistant tone | Direct, some tough love, some warmth (Trinity is one assistant) |
+| Voice | Female |
 | Budget | About $5–15/mo for the Claude API |
 | Color scheme | Any default; switchable (Paper, Midnight, Sage, Dusk, Sunrise, or Auto) |
 
