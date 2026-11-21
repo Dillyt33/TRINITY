@@ -1,143 +1,175 @@
-# Timeblock: plan
+# Timeblock: plan (v2)
 
-A time-blocking app that keeps you on track. It has a simple, calm interface and several color schemes. It runs on your computer and your iPhone, and your schedule is stored as Markdown files in iCloud Drive. Claude can add to it from chat, from Claude Code, or from your voice.
+A time-blocking app with an AI coach that keeps you on track. It runs on your iPhone and your Mac, stays in sync between them, and sends notifications even when the app is closed.
 
-Status: **plan and concept mockups. No app code yet.** Mockups: https://claude.ai/artifact/6Fpr2gprsuVvDJEaNj3eZr
+Status: **plan and concept mockups. No app code yet.** Mockups: https://claude.ai/artifact/6Fpr2gprsuVvDJEaNj3eZr (new: "AI coach & notifications" row)
+
+### What changed since v1
+- **Notifications are a must,** including when the app is closed.
+- **New: an AI coach.** It reminds you, changes the schedule when needed, and explains why sticking to it matters.
+- **iCloud is no longer required.** Sync between iPhone and Mac now goes through a cloud backend (Google Cloud / Firebase).
+- **Google Calendar is an optional mirror,** so you can also see your blocks in Calendar on the Mac.
+- **Markdown becomes an export/import format** instead of the storage format.
 
 ---
 
-## 1. What you asked for, and where it lands
+## 1. Your questions, answered
 
-| Request | How the plan covers it |
+### Can we build a native iPhone app as a demo without the Developer Program?
+Yes, but it couldn't do the part that matters most to you.
+
+| | Native app, free Apple ID | Installable web app (recommended now) |
+|---|---|---|
+| Install | Xcode on your Mac, then cable or Wi-Fi to the phone | Safari → Share → Add to Home Screen |
+| Expires | **Every 7 days** (reinstall from Xcode) | Never |
+| Reminders you set ahead | Yes (local notifications) | Yes |
+| **Coach messages and instant changes while the app is closed** | **No.** Push needs the paid program | **Yes**, via Web Push (iOS 16.4+) |
+| On your Mac | Separate Mac build | Same app: Safari → File → Add to Dock, with notifications |
+| Widgets, Live Activities, Siri intents | Possible | No (they come with the native wrapper later) |
+
+Expo Go (the no-Xcode way to run React Native apps) also dropped remote push in SDK 53, so it has the same gap.
+
+**Recommendation:** build it as an installable web app now. On the iPhone it sits on the Home Screen, opens full screen, and gets real push notifications. Build it so that when you join the Developer Program ($99/yr), we wrap the same code in a native shell (Capacitor) and add widgets, Live Activities, Siri and native push with action buttons.
+
+### Google Calendar?
+Yes, as an optional two-way mirror of a dedicated "Timeblock" calendar:
+- You see your blocks in Calendar on the Mac (add your Google account) or at calendar.google.com.
+- Google Calendar's own alerts act as a backup reminder channel.
+- Claude's built-in Google Calendar connector can create and update events, so you could also say "add gym tomorrow at 6" in any Claude app and it shows up in Timeblock.
+
+### App on the laptop too, synced with the phone?
+Yes. The same app installs on your Mac (Safari → File → Add to Dock). Both devices read and write the same cloud database, so a change on one shows up on the other within about a second. Google Calendar is optional on top of that.
+
+---
+
+## 2. Recommended architecture
+
+```
+  iPhone (Home Screen app)        Mac (Dock app)            Claude apps / Siri
+           │  ▲                       │  ▲                        │
+     edits │  │ Web Push        edits │  │ Web Push               │ MCP connector / Shortcut
+           ▼  │                       ▼  │                        ▼
+  ┌──────────────────────── Google Cloud (Firebase) ────────────────────────┐
+  │  Auth (Sign in with Google)   Firestore (live sync)   Cloud Functions    │
+  │  Cloud Tasks (exact-time reminders)    Push sender (VAPID Web Push)      │
+  │  Coach service ──► Claude API          MCP server (Cloud Run)            │
+  │  Google Calendar sync (optional, two-way)                                │
+  └──────────────────────────────────────────────────────────────────────────┘
+```
+
+| Piece | Choice | Why |
+|---|---|---|
+| App | TypeScript + Svelte 5, installable web app (PWA) | Smooth, small, one codebase for iPhone and Mac; can be wrapped in a native shell later |
+| Sign-in | Firebase Auth, Sign in with Google | One tap; the same account unlocks Calendar sync |
+| Data and sync | Firestore | Live sync across devices; works offline and catches up |
+| Reminders | Cloud Tasks, one task per reminder | Fires at an exact time and is easy to cancel when a block moves |
+| Push | Web Push (VAPID) to every device you've signed in on | Reaches you when the app is closed, on iPhone and Mac |
+| AI | Claude API (`claude-opus-5-5`) | Coaching, re-planning, natural-language edits |
+| Claude everywhere | Remote MCP server on Cloud Run, added as a custom connector on claude.ai | Always on, so your Mac doesn't need to be awake; works in the Claude iPhone app |
+| Calendar | Google Calendar API, optional | Mac Calendar view, backup alerts, Claude's built-in connector |
+
+---
+
+## 3. Notifications
+
+- **For each block,** the server queues three reminders: "Up next" 5 minutes before, "Starting now", and an end-of-block check-in. Moving or resizing a block, from any device or by the coach, cancels and re-queues them.
+- **Coach messages** (morning brief, nudges, re-plan suggestions) go out the same way.
+- **Controls:** quiet hours, per-category on/off, and a "gentle / direct / tough love" tone.
+- **Requirements on iPhone:** iOS 16.4 or later, app added to the Home Screen, and a one-time tap on "Turn on notifications".
+- **Backup channel:** with the Google Calendar mirror on, each block also carries a calendar alert.
+
+## 4. The AI coach
+
+**What it knows:**
+- Your goals and why they matter to you (set up in a short onboarding).
+- Your schedule.
+- Your history: streaks, completion rates, and which blocks you tend to skip.
+
+**What it does:**
+- Morning brief: the day at a glance and the one block that matters most.
+- Nudges before, during and after blocks, written around your goals ("this keeps your 4×/week streak").
+- Check-ins when a block ends: Done / Need more time / Didn't start.
+- Re-planning when you fall behind. It proposes the change and you tap Apply. Small changes can apply automatically if you allow it.
+- Answers "why should I stick to this?" with your own goals and numbers, not generic motivation.
+- Evening review and a suggested plan for tomorrow.
+
+**Tools it gets:**
+- `get_schedule`, `find_free_time`, `get_goals`, `get_stats`
+- `add_block`, `move_block`, `resize_block`, `delete_block`, `mark_done`
+
+**Guardrails:**
+- It asks before changing more than two blocks at once.
+- Every change is logged and undoable.
+- It never deletes without asking.
+- It respects quiet hours.
+
+**How it's built:**
+- Nudges and briefs are single Claude API calls.
+- The coach chat is an agent with the schedule tools. The default is Claude Managed Agents: Anthropic hosts the agent loop. It's in beta, bills session runtime on top of tokens, and keeps session history until it's deleted. Alternatively we run our own loop on the Messages API in Cloud Functions, if you'd rather host it.
+
+**Rough cost** at Opus 5.5 rates ($4 in / $20 out per million tokens; estimates):
+
+| Usage | Per item | Per month |
+|---|---|---|
+| Nudge | ≈ 1.5K tokens in + 80 out ≈ $0.008 | 12 a day ≈ $3 |
+| Coach chat turn | ≈ $0.03 | 10 a day ≈ $9 |
+
+Prompt caching brings both down. This needs an Anthropic API key, which is billed separately from a Claude subscription.
+
+## 5. Getting things in
+
+| Source | How |
 |---|---|
-| Visually appealing, simple, slick and smooth | Inter type, soft tinted blocks, one accent color, 250 ms eased transitions, 15-minute snap when dragging |
-| Several color schemes | Paper, Midnight, Sage, Dusk, Sunrise, plus an option to follow system light/dark |
-| Daily plan sections | Day view: timeline, plus an Unscheduled list, today's intention, and where the time goes |
-| Click a task to see it | Detail panel on desktop, bottom sheet on iPhone: checklist, notes, +15 min, move to tomorrow, done |
-| Monthly view | Month grid with a ribbon showing each day's blocks, % done for past days, and the selected day's agenda |
-| Claude can add things here, from chat, from voice | `CLAUDE.md` format guide (Claude Code), a Timeblock MCP connector (Claude Desktop / claude.ai), and a Siri Shortcut |
-| Runs on my computer, syncs to my phone over iCloud | Plain `.md` files in an iCloud Drive folder; the same UI runs on both devices |
-| Saved as Markdown | One file per day, readable and editable in any text editor |
+| In the app | Quick-add bar ("gym 6pm 1h #health") or tell the coach |
+| Claude chat (desktop, web, iPhone) | Timeblock MCP connector: add, move or plan days, find free time |
+| Siri | Shortcut: Dictate Text → "Get Contents of URL" (POST to the Timeblock API) → the coach schedules it → push confirmation |
+| Google Calendar | With the mirror on, events you or Claude add to the Timeblock calendar import automatically |
+| Markdown | Copy or export a day as Markdown, or paste Markdown to import (same line format as v1: `- [ ] 09:00-10:30 Title #tag`) |
 
----
+## 6. Costs
 
-## 2. Research findings
-
-**Time-blocking apps (what to borrow).**
-- Reviewers rate Sunsama highest for polish and its guided daily ritual, Structured for a simple visual timeline, and Akiflow for pulling tasks together and for its AI planning. Several reviews call Structured's design utilitarian. ([Zapier](https://zapier.com/blog/best-time-blocking-app), [Akiflow: Amie vs Structured](https://akiflow.com/blog/amie-vs-structured), [Routine: apps like Structured](https://routine.co/blog/posts/apps-like-structured))
-- Common interaction patterns: click to create, drag to move, drag an edge to resize, a 15-minute snap by default (Sunsama allows 5-minute steps), and a live current-time line. ([Obsidian Time Blocks](https://community.obsidian.md/plugins/time-blocks), [Sunsama changelog](https://roadmap.sunsama.com/changelog/calendar-and-timeboxing-upgrades))
-- A known gap: most phone apps make you open an event to change its length. Akiflow users have asked for drag-to-resize on mobile. We'll add it. ([Akiflow request](https://akiflow.featurebase.app/p/mobile-drag-to-resize-for-time-blocks-on-mobile))
-- What to take: Structured's timeline clarity, Sunsama's calm and its "intention for the day", and a "Now" card on the phone so you always know what you should be doing.
-
-**Markdown format.**
-- The Obsidian Day Planner ecosystem already uses a `- [ ] 09:00 - 10:30 Task` style inside notes. We'll use a compatible format, so the files also work with those tools. ([Obsidian Day Planner](https://community.obsidian.md/plugins/obsidian-day-planner))
-
-**Getting iCloud files onto the iPhone (the hard part).**
-- A plain web app on an iPhone cannot read or write an iCloud Drive folder. Safari on iOS doesn't support `showDirectoryPicker`, and WebKit has said it won't add it. ([caniuse](https://caniuse.com/mdn-api_window_showdirectorypicker), [Apple forums](https://developer.apple.com/forums/thread/816515))
-- A native iPhone app built with a free Apple account can't use iCloud, and it stops launching after 7 days unless you reinstall it. The $99/yr Apple Developer Program removes both limits. ([Apple forums](https://developer.apple.com/forums/thread/818501), [Tauri free-team signing notes](https://takazudo-zudo-tauri.pages.dev/pj/zudo-tauri/docs/mobile/ios-signing-free-team))
-- Obsidian (free) runs on Mac, Windows and iPhone, keeps its vault in iCloud Drive, and runs community plugins on iOS. So a Timeblock plugin gets file access and iCloud sync on both devices with no Apple developer account.
-- Caveat: iCloud on iOS only syncs while the app is open, and Obsidian's forum has reports of lag. Keeping one file per day means small writes and few conflicts. ([Obsidian forum: iCloud](https://forum.obsidian.md/t/icloud-drive-ios-and-macos-sync-inconsistencies-serious/34542/4))
-
-**Claude integration.**
-- Claude Code can read and edit the folder directly. A `CLAUDE.md` in the folder teaches it the format.
-- Claude Desktop runs local MCP servers, so a small Timeblock MCP server gives it `add_block`, `find_free_time` and similar tools.
-- The Claude iPhone app can use custom connectors, but only remote ones that you set up on web or desktop and that are reachable from the public internet. Local servers don't work on mobile. ([Claude help: remote MCP](https://support.claude.com/en/articles/11176164-pre-built-connectors-using-remote-mcp))
-- The Claude iOS app has an **Ask Claude** action for Siri and Shortcuts (iOS 18+). Shortcuts can **Dictate Text** and **Append to Text File** in iCloud Drive. That gives you hands-free capture: Siri → Claude formats the line → saved to `Inbox.md`. ([Claude help: App Intents](https://support.claude.com/en/articles/10263469-using-claude-app-intents-shortcuts-and-widgets-on-ios), [AppleVis: Shortcuts append](https://applevis.com/blog/getting-it-done-shortcut-ios-12))
-
----
-
-## 3. Recommended architecture
-
-```
-              ┌──────────────── iCloud Drive / Timeblock ────────────────┐
-              │  Days/2026/2026-11-21.md   Inbox.md   Templates/         │
-              │  Settings.md               CLAUDE.md                     │
-              └───────▲───────────────▲───────────────▲──────────▲───────┘
-                      │               │               │          │
-        Timeblock UI (Mac)   Timeblock UI (iPhone)   MCP server   Siri Shortcut
-        Obsidian plugin      same plugin, mobile     (Claude      (Dictate → Ask
-                                                      Desktop/Code) Claude → Append)
-```
-
-**One shared codebase (TypeScript):**
-
-| Package | What it is |
+| Item | Cost |
 |---|---|
-| `core` | Markdown parser and serializer (lossless: lines it doesn't understand are kept exactly as they were), time maths, free-slot finder, conflict detection, natural-language quick-add ("gym 6pm 1h #health") |
-| `ui` | Svelte 5 components: Day, Week, Month, Task detail, Quick add, Themes (CSS variables) |
-| `obsidian-plugin` | Host for Mac and iPhone: full-screen Timeblock view, file I/O through Obsidian's vault API, live refresh when files change |
-| `mcp-server` | Node MCP server using the same `core`: `get_day`, `get_range`, `add_block`, `update_block`, `move_block`, `complete_block`, `delete_block`, `find_free_time`, `add_unscheduled`, `process_inbox` |
-| `shortcuts/` | Step-by-step Siri Shortcut setup, plus the prompt for the Ask Claude step |
+| Firebase / Google Cloud | Blaze plan (pay-as-you-go, card required); personal use likely fits the free quotas, about $0–1/mo |
+| Claude API | Roughly $5–15/mo depending on how much you chat with the coach |
+| Google Calendar API | Free |
+| Apple | $0 now; $99/yr only if/when we go native |
 
-### Phone host: options
+For Google Calendar, the OAuth app must be set to "In production": in "Testing" mode, sign-ins expire every 7 days. For personal use you'll click through one "unverified app" screen.
 
-| Option | Cost to you | Pros | Cons |
-|---|---|---|---|
-| **A. Obsidian plugin (recommended for v1)** | Free | One app on Mac, Windows and iPhone; real iCloud files; no Xcode or signing | You open Obsidian to reach it (it can open straight into Timeblock); no lock-screen notifications |
-| B. Native app (Capacitor wrapping the same UI) | $99/yr Apple Developer + Xcode on a Mac | Home-screen widget, notifications, native Siri "Add to Timeblock" | More setup; App Store/TestFlight steps |
-| C. Mac-hosted web app + phone over Tailscale | Free | No Obsidian | Not iCloud; phone only works while the Mac is awake |
+## 7. Build phases
 
-The UI stays separate from the host, so we can move from A to B later without rewriting it.
-
-### File format (v1)
-
-```markdown
----
-date: 2026-11-21
-intention: Ship the proposal draft before lunch
----
-
-## Plan
-- [x] 07:00-07:45 Morning routine #health
-- [ ] 08:30-10:30 Deep work: proposal draft #deep
-    - [x] Outline sections 1–3
-    - [ ] Send to Alex for review
-    > Use last year's deck as the skeleton.
-- [ ] 11:00-12:00 Call with Sam #meet ✦
-
-## Unscheduled
-- [ ] Reply to landlord ~15m #admin
-
-## Notes
-Anything here is yours; the app leaves it alone.
-```
-
-Rules:
-- One block per line: `- [ ] HH:MM-HH:MM Title #category`.
-- Times are 24-hour. `09:00 - 10:30`, with spaces, is also accepted.
-- `~30m` gives an estimate for unscheduled items.
-- `✦` marks a block that Claude added.
-- An indented `- [ ]` line is a checklist item. An indented `>` line is a note.
-- Categories (`#deep #meet #health #personal #admin`) and their colors live in `Settings.md`, and you can add your own.
-- `Inbox.md` holds lines like `2026-11-24 - [ ] 14:00-15:00 Dentist #health`. The app files each one into its day and removes only the lines it processed.
-
-### Sync and safety
-- Every write re-reads the file first and merges, so an edit made on the phone a minute ago isn't overwritten.
-- If iCloud creates a conflict copy (`2026-11-21 2.md`), the app shows it and offers a one-tap merge.
-- The parser round-trips files without loss and has unit tests, so Claude and you can edit the same file safely.
-
----
-
-## 4. Build phases
-
-1. **Format and core.** Write `CLAUDE.md`, build the parser and serializer, and test them. From here, Claude Code can already plan your days.
-2. **Day view.** Timeline, drag/resize with snapping, task detail, quick add, the five color schemes, and the Now card on the phone. Ships as the Obsidian plugin on Mac and iPhone.
-3. **Month and Week views.** Plus templates ("weekday", "weekend") and Inbox processing.
-4. **Claude.** MCP server for Claude Desktop and Claude Code, and the Siri Shortcut.
-5. **Optional.** A remote connector so the Claude iPhone app can edit your schedule (the Mac serves it through a private tunnel, so the Mac must be awake). Reminders, and a native wrapper with widgets.
+1. **Foundation.** Installable app, Sign in with Google, live sync, Day view, task detail, quick add, color schemes. Works on iPhone and Mac.
+2. **Notifications.** Push sign-up, reminder scheduler, check-in flow, quiet hours.
+3. **Month and Week views,** plus templates.
+4. **Coach v1.** Morning brief, smart nudges, check-ins, re-plan proposals, coach chat with schedule tools.
+5. **Claude everywhere.** MCP connector, Siri Shortcut, optional Google Calendar two-way mirror.
+6. **Native wrapper,** once you're in the Developer Program: native push with action buttons, widgets, Live Activities.
 
 Each phase ends with something you can use.
 
-## 5. Risks
+## 8. Risks
 
-- **iCloud on iOS** syncs while the app is open, so changes can lag by seconds to minutes. One-file-per-day keeps writes small.
-- **Notifications.** An Obsidian plugin can't send reminders while the app is closed. Option B (native) fixes this.
-- **Claude from the iPhone app** needs a server reachable from the internet. Siri plus Ask Claude covers most phone capture without one.
+- **iOS web push** works when the app is closed, but some developers report it's less consistent than native push. Mitigation: the Google Calendar alert backup now, the native wrapper later.
+- **Notification buttons** (Done / +15) on iOS web push aren't confirmed. The mockups assume you tap the notification to open the check-in.
+- **iOS specifics:** removing the Home Screen icon removes its notification sign-up, and if you tap "Don't Allow", iOS won't ask again. The app will explain both.
 
-## 6. Decisions for you
+## 9. Decisions for you
 
-1. Phone host: **A (Obsidian)**, or B (native, $99/yr)?
-2. Keep all five color schemes? Which should be the default?
-3. Should the week start on Sunday or Monday? Default visible hours are 7 AM–7 PM.
-4. Is your computer a Mac or a Windows PC? (Both work with A.)
-5. For v1, is Siri capture enough, or do you want the Claude iPhone app connector too?
+1. Go with an installable app now and native later?
+2. Google Calendar mirror: on or off?
+3. Coach tone: gentle, direct or tough love?
+4. Do you have an Anthropic API key, and is roughly $5–15/mo OK?
+5. OK to create a Firebase project under your Google account? (The Blaze plan needs a card on file.)
+6. Still open from v1: default color scheme, and week starting Sunday or Monday.
+
+---
+
+## Sources
+- Web Push for iOS Home Screen web apps: [WebKit](https://webkit.org/?p=13878), [Apple developer docs](https://developer.apple.com/documentation/usernotifications/sending-web-push-notifications-in-web-apps-and-browsers), [OneSignal guide](https://documentation.onesignal.com/docs/web-push-for-ios), [MagicBell: PWA limits on iOS](https://www.magicbell.com/blog/pwa-ios-limitations-safari-support-complete-guide), [Discourse thread on reliability](https://meta.discourse.org/t/-/394149/1)
+- Safari web apps on Mac (Add to Dock, notifications): [Apple Support](https://support.apple.com/en-au/104996)
+- Expo Go has no remote push from SDK 53: [Expo push FAQ](https://docs.expo.dev/push-notifications/faq/)
+- Free Apple ID limits (no push or iCloud, 7-day expiry): [Apple forums](https://developer.apple.com/forums/thread/818501); local notifications without a server: [Apple archive](https://developer.apple.com/library/content/documentation/NetworkingInternet/Conceptual/RemoteNotificationsPG/SchedulingandHandlingLocalNotifications.html)
+- Google OAuth "Testing" refresh tokens expire after 7 days: [Google Ads API forum](https://groups.google.com/g/adwords-api/c/Z_kihrf6VCE)
+- Claude's Google Calendar connector can create and update events: [Claude help](https://support.claude.com/en/articles/10166901-use-google-workspace-connectors), [connector page](https://claude.com/connectors/google-calendar)
+- Claude remote MCP connectors on mobile: [Claude help](https://support.claude.com/en/articles/11176164-pre-built-connectors-using-remote-mcp)
