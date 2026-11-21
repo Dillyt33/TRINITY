@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Trinity</title>
+    <meta name="description" content="Time blocks and a coach that keeps you on track." />
+    <meta name="theme-color" content="#0D1016" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Trinity" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <script>
+      // Paint the last-used background before the app loads, so there is no flash.
+      try {
+        var c = JSON.parse(localStorage.getItem('trinity:theme-cache') || 'null');
+        if (c) { document.documentElement.style.background = c.bg; document.documentElement.style.colorScheme = c.dark ? 'dark' : 'light'; }
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
