@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { dueReminders, runReminders, templateNotice, type DayContext, type Notice } from '../src/reminders';
 import { MemoryPushStore, MemoryScheduleStore } from '../src/store';
+import { MemoryChatStore } from '../src/assistant';
 import type { Block } from '../../src/lib/types';
 
 const blk = (id: string, start: number, end: number, over: Partial<Block> = {}): Block => ({
@@ -39,12 +40,13 @@ describe('templateNotice', () => {
   it('writes plain reminders that open the right screen', () => {
     const b = blk('Deep work', 510, 630, { subtasks: [{ id: 's', text: 'Outline sections', done: false }] });
     const up = templateNotice({ kind: 'upnext', key: 'k', block: b }, ctx(505, [b]));
-    expect(up).toMatchObject({ title: 'Up next: Deep work', url: '/?block=Deep%20work' });
-    expect(up.body).toContain('starts in 5 min. First: Outline sections.');
+    expect(up).toMatchObject({ title: 'Trinity', url: '/?block=Deep%20work' });
+    expect(up.body).toBe('Deep work in 5 min (8:30 – 10:30 AM). Start with: Outline sections.');
     const ci = templateNotice({ kind: 'blockcheck', key: 'k', block: b }, ctx(631, [b]));
     expect(ci.url).toBe('/checkin?kind=block&id=Deep%20work');
     const mid = templateNotice({ kind: 'midday', key: 'k' }, ctx(780, [blk('x', 500, 560, { done: true }), blk('y', 840, 900)]));
-    expect(mid.body).toBe('1 of 2 done so far. Next: y at 2:00 PM.');
+    expect(mid.body).toBe('Halfway check: 1 of 2 done. Next up is y at 2:00 PM. How are you holding up?');
+    expect(ci.title).toBe('Trinity');
   });
 });
 
@@ -67,11 +69,37 @@ describe('runReminders', () => {
     const clock = () => new Date('2026-11-21T20:56:00Z');
     const r1 = await runReminders({ schedule, push, send, writer, defaultTz: 'UTC', clock });
     expect(r1.sent).toBe(2);
-    expect(sent.map((s) => s.notice.title).sort()).toEqual(['How did “Deep” go?', 'Up next: Gym']);
-    expect(sent.find((s) => s.notice.title.startsWith('How did'))!.notice.body).toBe('Written by Trinity');
-    expect(sent.find((s) => s.notice.title.startsWith('Up next'))!.notice.body).not.toBe('Written by Trinity');
+    expect(sent.map((s) => s.notice.title)).toEqual(['Trinity', 'Trinity']);
+    const checkin = sent.find((s) => s.notice.url.startsWith('/checkin'))!;
+    expect(checkin.notice.body).toBe('Written by Trinity');
+    const upnext = sent.find((s) => s.notice.url.startsWith('/?block='))!;
+    expect(upnext.notice.body).toBe('Gym in 4 min (4:00 – 5:00 PM).');
     expect(await push.listDevices('u1')).toHaveLength(1); // the dead device was removed
     const r2 = await runReminders({ schedule, push, send, writer, defaultTz: 'UTC', clock });
     expect(r2.sent).toBe(0); // not sent twice
+  });
+});
+
+describe('check-ins with Trinity’s chat set up', () => {
+  it('opens a conversation with the check-in message and links the notification to it', async () => {
+    const schedule = new MemoryScheduleStore({ u1: { tz: 'America/New_York' } });
+    await schedule.putBlock('u1', blk('Deep', 14 * 60, 15 * 60 + 55));
+    const push = new MemoryPushStore();
+    await push.putDevice('u1', { id: 'phone', endpoint: 'https://push/phone', keys: { p256dh: 'a', auth: 'b' }, label: 'iPhone', createdAt: 0 });
+    const chat = new MemoryChatStore();
+    await chat.putAssistant('u1', { environmentId: 'env', agentId: 'agent', agentVersion: 1, vaultId: 'vlt', mcpUrl: 'https://x/mcp', personaVersion: '3', createdAt: 0, updatedAt: 0 });
+    const sent: Notice[] = [];
+    let n = 0;
+    await runReminders({
+      schedule, push, chat, newId: (p) => `${p}${++n}`,
+      send: async (_d, notice) => { sent.push(notice); return 'ok' as const; },
+      defaultTz: 'UTC',
+      clock: () => new Date('2026-11-21T20:56:00Z'),
+    });
+    expect(sent).toHaveLength(1);
+    expect(sent[0].url).toBe('/chat?c=cv1');
+    expect(sent[0].body).toBe('Deep just wrapped. How did it go?');
+    expect(await chat.getConversation('u1', 'cv1')).toMatchObject({ kind: 'checkin', opener: 'Deep just wrapped. How did it go?', sessionId: null });
+    expect(chat.messages.get('u1/cv1')).toEqual([expect.objectContaining({ role: 'trinity', text: 'Deep just wrapped. How did it go?', status: 'done' })]);
   });
 });

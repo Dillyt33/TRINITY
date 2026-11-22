@@ -2,31 +2,24 @@
 
 Trinity is a personal AI assistant that runs your schedule and keeps you on track. You talk to her in Claude; this repo is her home: an installable time-blocking app for iPhone and Mac, the connector that lets Claude change your calendar, and the server that sends reminders and asks how you're doing.
 
-## What works today (phase 1)
+## What Trinity does
 
-- **Day timeline.**
-  - Blocks colored by category, with a live "now" line.
-  - Drag to move. Drag the bottom edge to resize (15-minute snap).
-  - Drag across empty space (or long-press on iPhone) to create a block.
-- **Block details.** Category, times, checklist, notes, plus **Mark done**, **+15 min**, **Tomorrow** and **Delete**, with Undo.
-- **Quick add in plain English.**
-  - "gym tomorrow 6pm 1h #health"
-  - "call mom fri 3-3:30pm"
-  - "renew passport ~20m" (no time, so it goes to Unscheduled)
-  - Press ⌘K to open it on Mac, or the mic button to dictate.
-- **Unscheduled to-dos.** Drag one onto the day, or send it to the next free slot.
-- **Now card.** What you should be doing, how long is left, and Done / +15.
-- **Month view.** A strip per day showing its blocks, % done for past days, and the selected day's agenda.
-- **Color schemes.** Paper, Midnight, Sage, Dusk, Sunrise, or Auto (follows light/dark).
-- **Markdown.** Copy a day as Markdown, or paste Markdown to import.
-- **Sync and offline.** Google sign-in syncs iPhone and Mac through Firebase, and the app works offline.
+- **Talks with you, by voice or text.** She checks in like a person: before and after blocks, and in the morning, midday and evening. A notification from "Trinity" opens a conversation where she speaks in a female voice and listens. See [docs/TRINITY-CHAT.md](docs/TRINITY-CHAT.md).
+- **Keeps your calendar.**
+  - Time-block day view: drag, resize, 15-minute snap, live "now" line.
+  - Block details with a checklist and notes.
+  - Plain-English quick add, to-dos, month view, five color schemes.
+- **Keeps track of your life.** Sleep, diet, exercise, mood, study, projects, money, health and mental health, with daily totals and patterns.
+- **Knows your Obsidian vault.** She searches and reads notes and writes her log into your daily notes, through a small helper on your Mac. See [docs/OBSIDIAN.md](docs/OBSIDIAN.md).
+- **Works inside Claude too.** The connector lets Claude's main chat, voice and Siri use the same calendar, log and notes. See [docs/CONNECT-CLAUDE.md](docs/CONNECT-CLAUDE.md).
+- **Syncs your iPhone and Mac** through your own Firebase project, and works offline.
 
 ## Quick start
 
 ```bash
 npm install
 npm run dev        # http://localhost:5173 (demo mode: saved in this browser)
-npm test           # unit tests
+npm test           # unit tests (also: npm run test:all)
 npm run build      # production build in dist/
 ```
 
@@ -59,11 +52,23 @@ src/
     markdown.ts         Markdown export/import
     layout.ts           overlapping blocks, free-slot finder
     themes.ts           color schemes
-  sw.ts                 service worker (offline; push notifications in phase 2)
+  sw.ts                 service worker (offline, push notifications)
 tests/                  unit tests (Vitest)
-functions/              Trinity's server: Claude connector (MCP tools + OAuth sign-in), reminders and check-ins
+functions/              Trinity's server: connector (MCP + OAuth), reminders, Trinity's chat (Managed Agents)
+bridge/                 Mac helper for the Obsidian vault
+assistant/              Trinity's personality and rules
 docs/PLAN.md            roadmap and decisions
 docs/SETUP.md           API key, Firebase, deploy, install
 ```
 
-Connect Claude so Trinity can manage the calendar by voice: [docs/CONNECT-CLAUDE.md](docs/CONNECT-CLAUDE.md). Reminders and "how are you doing?" check-ins: [docs/REMINDERS.md](docs/REMINDERS.md). Roadmap and build order: [docs/ASSISTANT-PLAN.md](docs/ASSISTANT-PLAN.md). Use Trinity on your iPhone today: [docs/PHONE-SETUP.md](docs/PHONE-SETUP.md).
+## Guides
+
+| Guide | What it covers |
+|---|---|
+| [docs/ASSISTANT-PLAN.md](docs/ASSISTANT-PLAN.md) | The whole picture, and the setup checklist in order |
+| [docs/SETUP.md](docs/SETUP.md) | API key, Firebase, deploy, install on iPhone and Mac |
+| [docs/CONNECT-CLAUDE.md](docs/CONNECT-CLAUDE.md) | Connecting Trinity to Claude's main chat, voice and Siri |
+| [docs/REMINDERS.md](docs/REMINDERS.md) | Notifications and check-ins |
+| [docs/TRINITY-CHAT.md](docs/TRINITY-CHAT.md) | Talking with Trinity by voice or text |
+| [docs/OBSIDIAN.md](docs/OBSIDIAN.md) | The Mac helper for your Obsidian vault |
+| [docs/PHONE-SETUP.md](docs/PHONE-SETUP.md) | Using Trinity on your iPhone |

@@ -160,6 +160,13 @@ export class TrinityOAuthProvider implements OAuthServerProvider {
     return { access_token: access, token_type: 'bearer', expires_in: ACCESS_TTL, refresh_token: refresh, scope: scopes.join(' ') || undefined };
   }
 
+  /** A long-lived token for Trinity's chat agent (stored in an Anthropic vault) to call this server. */
+  async issueAgentToken(uid: string): Promise<string> {
+    const token = `tat_${secret()}`;
+    await this.store.put<TokenRecord>('tokens', hash(token), { type: 'access', clientId: 'trinity-assistant', uid, scopes: ['trinity'], expiresAt: nowSec() + 10 * 365 * 24 * 60 * 60 });
+    return token;
+  }
+
   async verifyAccessToken(token: string): Promise<AuthInfo> {
     const rec = await this.store.get<TokenRecord>('tokens', hash(token));
     if (!rec || rec.type !== 'access' || rec.expiresAt < nowSec()) throw new InvalidTokenError('Invalid or expired access token');

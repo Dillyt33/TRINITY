@@ -5,6 +5,7 @@ import { guessCategory, parseQuickAdd } from '../../src/lib/parse';
 import { addDays, clockAp, duration, hhmm, longDate, shortDate, timeRange, weekday } from '../../src/lib/time';
 import { CATEGORY_NAMES, DEFAULT_NOTIFY, DEFAULT_SETTINGS, LIFE_AREAS, MOOD_LABELS, type Block, type CategoryId, type CheckIn, type LifeArea, type LifeEntry, type Mood, type Subtask, type Task } from '../../src/lib/types';
 import type { ScheduleStore } from './store';
+import { registerVaultTools, type BridgeStore } from './bridge';
 import { nowIn } from './zone';
 
 export interface ToolContext {
@@ -12,6 +13,8 @@ export interface ToolContext {
   uid: string;
   /** Used when the person's settings don't include a time zone yet. */
   defaultTz?: string;
+  /** Obsidian access through the Mac helper. */
+  bridge?: BridgeStore;
   clock?: () => Date;
 }
 
@@ -562,6 +565,8 @@ export function buildServer(ctx: ToolContext): McpServer {
     },
   );
 
+
+  if (ctx.bridge) registerVaultTools(server, { store: ctx.bridge, uid });
   return server;
 }
 

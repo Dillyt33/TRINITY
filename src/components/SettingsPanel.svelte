@@ -6,6 +6,7 @@
   import type { ThemeSetting } from '../lib/types';
   import { connectorUrl } from '../lib/connector';
   import ReminderSettings from './ReminderSettings.svelte';
+  import AssistantSettings from './AssistantSettings.svelte';
 
   let profileDraft = $state(app.settings.profile ?? '');
   let profileTimer: ReturnType<typeof setTimeout> | undefined;
@@ -109,6 +110,8 @@
       <div class="note"><Icon name="sparkle" size={16} /><span>Once Trinity is synced through Firebase and deployed (docs/SETUP.md), you can connect Claude here so Trinity can manage this calendar by voice.</span></div>
     {/if}
   </section>
+
+  <AssistantSettings />
 
   <ReminderSettings />
 

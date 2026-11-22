@@ -2,7 +2,7 @@
   type Name =
     | 'chevron-left' | 'chevron-right' | 'chevron-down' | 'check' | 'plus' | 'clock' | 'cloud' | 'cloud-off'
     | 'calendar' | 'list' | 'inbox' | 'mic' | 'sparkle' | 'trash' | 'arrow-right' | 'settings' | 'x'
-    | 'grip' | 'target' | 'copy' | 'upload' | 'sun' | 'moon' | 'bell' | 'user' | 'logout';
+    | 'grip' | 'target' | 'copy' | 'upload' | 'sun' | 'moon' | 'bell' | 'user' | 'logout' | 'speaker' | 'speaker-off';
 
   let { name, size = 16, stroke = 1.7 }: { name: Name; size?: number; stroke?: number } = $props();
 </script>
@@ -33,6 +33,8 @@
   {:else if name === 'moon'}<path d="M13.5 9.6A5.8 5.8 0 0 1 6.4 2.5a5.8 5.8 0 1 0 7.1 7.1z" />
   {:else if name === 'bell'}<path d="M4 11.5V7.2a4 4 0 0 1 8 0v4.3l1.2 1.2H2.8zM6.5 14h3" />
   {:else if name === 'user'}<circle cx="8" cy="5.5" r="2.8" /><path d="M2.8 14a5.2 5.2 0 0 1 10.4 0" />
+  {:else if name === 'speaker'}<path d="M2.5 6v4h2.6L8.5 13V3L5.1 6z" /><path d="M10.8 5.6a3.4 3.4 0 0 1 0 4.8M12.6 3.8a6 6 0 0 1 0 8.4" />
+  {:else if name === 'speaker-off'}<path d="M2.5 6v4h2.6L8.5 13V3L5.1 6z" /><path d="M11 6l3 4M14 6l-3 4" />
   {:else if name === 'logout'}<path d="M6 2.5H3.5v11H6M10 5l3 3-3 3M13 8H6" />
   {/if}
 </svg>

@@ -1,6 +1,7 @@
 import { addDays, clockAp, duration, timeRange } from '../../src/lib/time';
 import { DEFAULT_NOTIFY, MOOD_LABELS, type Block, type CheckIn, type NotifySettings } from '../../src/lib/types';
 import type { PushDevice, PushStore, ScheduleStore } from './store';
+import { startCheckinConversation, type ChatStore } from './assistant';
 import { nowIn } from './zone';
 
 export type ReminderKind = 'upnext' | 'blockcheck' | 'morning' | 'midday' | 'evening';
@@ -73,52 +74,31 @@ export function dueReminders(ctx: DayContext, notify: Partial<NotifySettings> | 
   return out.slice(0, 3);
 }
 
-/** Plain, no-AI wording. Also the fallback when Claude isn't set up. */
+/** Plain, no-AI wording, like a text from a person. Also the fallback when Claude isn't set up. */
 export function templateNotice(r: Reminder, ctx: DayContext): Notice {
   const real = ctx.blocks.filter((b) => b.cat !== 'break');
   const done = real.filter((b) => b.done).length;
   const next = real.find((b) => !b.done && b.start > ctx.now);
   const b = r.block;
+  const t = (body: string, url: string): Notice => ({ title: 'Trinity', body, url, tag: r.key });
   switch (r.kind) {
     case 'upnext': {
       const step = b!.subtasks.find((s) => !s.done);
-      return {
-        title: `Up next: ${b!.title}`,
-        body: `${timeRange(b!.start, b!.end)}, starts in ${b!.start - ctx.now} min.${step ? ` First: ${step.text}.` : ''}`,
-        url: `/?block=${encodeURIComponent(b!.id)}`,
-        tag: r.key,
-      };
+      return t(`${b!.title} in ${b!.start - ctx.now} min (${timeRange(b!.start, b!.end)}).${step ? ` Start with: ${step.text}.` : ''}`, `/?block=${encodeURIComponent(b!.id)}`);
     }
     case 'blockcheck':
-      return {
-        title: `How did “${b!.title}” go?`,
-        body: 'Tap to check in: done, need more time, or move it.',
-        url: `/checkin?kind=block&id=${encodeURIComponent(b!.id)}`,
-        tag: r.key,
-      };
+      return t(`${b!.title} just wrapped. How did it go?`, `/checkin?kind=block&id=${encodeURIComponent(b!.id)}`);
     case 'morning':
-      return {
-        title: 'Good morning',
-        body: real.length
-          ? `${real.length} blocks today${ctx.intention ? `. The one that matters: ${ctx.intention}` : next ? `, starting with ${next.title} at ${clockAp(next.start)}` : ''}. How are you feeling?`
-          : 'Nothing planned yet. Tell me what today should look like. How are you feeling?',
-        url: '/checkin?kind=mood&moment=morning',
-        tag: r.key,
-      };
+      return t(
+        real.length
+          ? `Morning! ${real.length} blocks today${ctx.intention ? `, and the one that matters is ${ctx.intention}` : next ? `, starting with ${next.title} at ${clockAp(next.start)}` : ''}. How did you sleep?`
+          : 'Morning! Nothing planned yet. How did you sleep, and what should today look like?',
+        '/checkin?kind=mood&moment=morning',
+      );
     case 'midday':
-      return {
-        title: 'How are you doing?',
-        body: `${done} of ${real.length} done so far.${next ? ` Next: ${next.title} at ${clockAp(next.start)}.` : ''}`,
-        url: '/checkin?kind=mood&moment=midday',
-        tag: r.key,
-      };
+      return t(`Halfway check: ${done} of ${real.length} done.${next ? ` Next up is ${next.title} at ${clockAp(next.start)}.` : ''} How are you holding up?`, '/checkin?kind=mood&moment=midday');
     case 'evening':
-      return {
-        title: 'How was today?',
-        body: real.length ? `${done} of ${real.length} done. Tap to check in and glance at tomorrow.` : 'Tap to check in and set up tomorrow.',
-        url: '/checkin?kind=mood&moment=evening',
-        tag: r.key,
-      };
+      return t(real.length ? `Day's winding down: ${done} of ${real.length} done. How was today?` : 'How was today?', '/checkin?kind=mood&moment=evening');
   }
 }
 
@@ -146,6 +126,9 @@ export interface RunDeps {
   push: PushStore;
   send: Sender;
   writer?: Writer | null;
+  /** When Trinity's chat is set up, check-ins open a conversation instead of the quick check-in screen. */
+  chat?: ChatStore | null;
+  newId?: (prefix: string) => string;
   defaultTz: string;
   clock?: () => Date;
   log?: (msg: string) => void;
@@ -180,6 +163,10 @@ export async function runReminders(deps: RunDeps): Promise<{ users: number; sent
         } catch (e) {
           deps.log?.(`writer failed, using template: ${(e as Error).message}`);
         }
+      }
+      if (r.kind !== 'upnext' && deps.chat && deps.newId && (await deps.chat.getAssistant(uid))) {
+        const conversationId = await startCheckinConversation({ chat: deps.chat, newId: deps.newId }, uid, notice.body);
+        notice = { ...notice, url: `/chat?c=${encodeURIComponent(conversationId)}` };
       }
       for (const d of devices) {
         const result = await deps.send(d, notice);

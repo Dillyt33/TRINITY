@@ -14,6 +14,8 @@
   import SignIn from './components/SignIn.svelte';
   import Connect from './components/Connect.svelte';
   import CheckIn from './components/CheckIn.svelte';
+  import Chat from './components/Chat.svelte';
+  import { chat } from './lib/chat.svelte';
   import { connectRequestId } from './lib/connector';
   import { app } from './lib/app.svelte';
   import { applyTheme, resolveTheme, THEMES } from './lib/themes';
@@ -29,6 +31,17 @@
   let online = $state(navigator.onLine);
   let inboxOpen = $state(false);
   let showEarlier = $state(false);
+  let pendingChat: string | null = null;
+  // Once signed in: start Trinity's chat, and open the conversation a notification pointed to.
+  $effect(() => {
+    if (app.user) {
+      chat.start();
+      if (pendingChat) {
+        chat.open(pendingChat);
+        pendingChat = null;
+      }
+    }
+  });
   let earlierFor = '';
   $effect(() => {
     if (app.date !== earlierFor) {
@@ -42,7 +55,11 @@
     app.init();
     // Opened from a notification?
     const url = new URL(window.location.href);
-    if (url.pathname === '/checkin') {
+    if (url.pathname === '/chat') {
+      app.view = 'chat';
+      pendingChat = url.searchParams.get('c');
+      history.replaceState(null, '', '/');
+    } else if (url.pathname === '/checkin') {
       const kind = url.searchParams.get('kind') === 'block' ? 'block' : 'mood';
       const moment = url.searchParams.get('moment');
       app.checkin = { kind, id: url.searchParams.get('id') ?? undefined, moment: (['morning', 'midday', 'evening'].includes(moment ?? '') ? moment : 'anytime') as 'morning' | 'midday' | 'evening' | 'anytime' };
@@ -167,6 +184,9 @@
 {:else if phone}
   <!-- ================= iPhone layout ================= -->
   <div class="phone">
+    {#if app.view === 'chat'}
+      <div class="ph-chat"><Chat compact /></div>
+    {:else}
     <header class="ph-head">
       <button class="ph-date" onclick={() => app.goTo(app.today)} aria-label="Go to today">
         {#if app.view === 'day'}
@@ -244,6 +264,7 @@
     {/if}
 
     <button class="fab" aria-label="Add a block" onclick={() => (app.quickAddOpen = true)}><Icon name="plus" size={24} stroke={2} /></button>
+    {/if}
 
     <nav class="tabs" aria-label="Sections">
       <button class:on={app.view === 'day'} aria-current={app.view === 'day' ? 'page' : undefined} onclick={() => app.goTo(app.view === 'day' ? app.today : app.date, 'day')}>
@@ -251,6 +272,9 @@
       </button>
       <button class:on={app.view === 'month'} aria-current={app.view === 'month' ? 'page' : undefined} onclick={() => (app.view = 'month')}>
         <Icon name="calendar" size={22} stroke={1.6} /><span>Month</span>
+      </button>
+      <button class:on={app.view === 'chat'} aria-current={app.view === 'chat' ? 'page' : undefined} onclick={() => (app.view = 'chat')}>
+        <Icon name="sparkle" size={22} /><span>Trinity</span>
       </button>
       <button onclick={() => (inboxOpen = true)}>
         <Icon name="inbox" size={22} stroke={1.6} /><span>Inbox</span>
@@ -303,6 +327,7 @@
       <div class="seg" role="tablist" aria-label="View">
         <button role="tab" aria-selected={app.view === 'day'} class:on={app.view === 'day'} onclick={() => (app.view = 'day')}>Day</button>
         <button role="tab" aria-selected={app.view === 'month'} class:on={app.view === 'month'} onclick={() => (app.view = 'month')}>Month</button>
+        <button role="tab" aria-selected={app.view === 'chat'} class:on={app.view === 'chat'} onclick={() => (app.view = 'chat')}>Trinity</button>
       </div>
       <div class="qa-wrap"><QuickAdd bind:this={quick} /></div>
       <div class="right">
@@ -373,8 +398,10 @@
           {#if app.selected}<Detail block={app.selected} />{/if}
         </Sheet>
       {/if}
-    {:else}
+    {:else if app.view === 'month'}
       <main class="monthview"><MonthView /></main>
+    {:else}
+      <main class="chatview"><div class="card chatcard"><Chat /></div></main>
     {/if}
 
     <Sheet open={!!app.checkin} onclose={() => (app.checkin = null)} label="Check-in">
@@ -611,6 +638,20 @@
   .ph-hint strong {
     color: var(--text);
   }
+  .chatview {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    justify-content: center;
+    padding: 18px 22px 22px;
+  }
+  .chatcard {
+    width: min(760px, 100%);
+    overflow: hidden;
+    border-radius: 18px;
+    display: flex;
+    flex-direction: column;
+  }
   .monthview {
     flex: 1;
     min-height: 0;
@@ -626,6 +667,13 @@
     position: relative;
     overflow: hidden;
     --tl-bg: var(--bg);
+  }
+  .ph-chat {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    position: relative;
   }
   .ph-head {
     display: flex;
@@ -794,8 +842,8 @@
     right: 0;
     bottom: 0;
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    padding: 6px 20px calc(8px + var(--safe-bottom));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    padding: 6px 12px calc(8px + var(--safe-bottom));
     background: color-mix(in srgb, var(--surface) 88%, transparent);
     backdrop-filter: blur(18px);
     -webkit-backdrop-filter: blur(18px);

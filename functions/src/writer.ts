@@ -13,8 +13,8 @@ export function personaText(profile: string): string {
 const ASK: Record<Reminder['kind'], string> = {
   upnext: 'Remind me that this block starts in a few minutes. Give me one concrete nudge to start well.',
   blockcheck: 'This block just ended. Ask how it went, briefly. If it matters to my goals, say why in a few words.',
-  morning: 'Morning check-in: one line on what matters today, then ask how I am feeling.',
-  midday: 'Midday check-in: ask how I am doing. Be honest about progress so far, warm if I am behind.',
+  morning: 'Morning check-in: one line on what matters today, and ask how I slept or how I am feeling.',
+  midday: 'Midday check-in: ask how I am doing. Be honest about progress so far, warm if I am behind. Maybe ask about food or energy.',
   evening: 'Evening check-in: ask how today went. Acknowledge what got done; no lecture.',
 };
 
@@ -37,9 +37,9 @@ export class ClaudeWriter implements Writer {
       output_config: { effort: 'low' },
       system:
         personaText(ctx.profile) +
-        '\n\n## Right now\nYou are writing ONE phone notification from Trinity. Reply with exactly two lines and nothing else:\n' +
-        'Line 1: a title, at most 40 characters.\nLine 2: the message, at most 140 characters.\n' +
-        'No quotes, emoji, hashtags or markdown. Be specific to my day; never generic motivation.',
+        '\n\n## Right now\nYou are texting me ONE short message as Trinity, like a real person would. It shows as a phone notification from "Trinity" and opens our chat. ' +
+        'Reply with the message only: one or two sentences, at most 160 characters. No quotes, emoji, hashtags or markdown. ' +
+        'Be specific to my day and what I have told you; never generic motivation.',
       messages: [{ role: 'user', content: `${ASK[r.kind]}\n${block}\n\n${describeDay(ctx)}` }],
     });
     if (response.stop_reason !== 'end_turn') return fallback;
@@ -47,9 +47,8 @@ export class ClaudeWriter implements Writer {
       .map((b) => (b.type === 'text' ? b.text : ''))
       .join('')
       .trim();
-    const [title, ...rest] = text.split('\n').map((s) => s.trim()).filter(Boolean);
-    const body = rest.join(' ');
-    if (!title || !body) return fallback;
-    return { ...fallback, title: title.slice(0, 60), body: body.slice(0, 220) };
+    const body = text.split('\n').map((s) => s.trim()).filter(Boolean).join(' ').replace(/^["“]|["”]$/g, '');
+    if (!body) return fallback;
+    return { ...fallback, body: body.slice(0, 240) };
   }
 }

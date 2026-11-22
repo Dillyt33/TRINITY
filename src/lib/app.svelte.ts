@@ -8,7 +8,7 @@ import type { QuickAdd } from './parse';
 import { addDays, clamp, monthGrid, nowMinutes, shortDate, timeRange, todayIso } from './time';
 import { DEFAULT_SETTINGS, type Block, type CategoryId, type CheckIn, type DayMeta, type Settings, type Subtask, type Task } from './types';
 
-export type View = 'day' | 'month';
+export type View = 'day' | 'month' | 'chat';
 export type Mode = 'local' | 'firebase';
 
 interface Toast {

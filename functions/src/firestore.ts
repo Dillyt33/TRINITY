@@ -1,6 +1,8 @@
 import type { Firestore } from 'firebase-admin/firestore';
 import type { Block, CheckIn, DayMeta, LifeEntry, Settings, Task } from '../../src/lib/types';
 import type { OAuthKind, OAuthStore, PushDevice, PushStore, ScheduleStore } from './store';
+import type { AssistantRecord, ChatMessage, ChatStore, Conversation } from './assistant';
+import type { BridgeInfo, BridgeJob, BridgeStore, VaultOp } from './bridge';
 
 const clean = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 
@@ -119,5 +121,58 @@ export class FirestoreOAuthStore implements OAuthStore {
   }
   async delete(kind: OAuthKind, id: string) {
     await this.ref(kind, id).delete();
+  }
+}
+
+/** Trinity's chat: users/{uid}/meta/assistant, users/{uid}/conversations/{id}/messages/{id}. */
+export class FirestoreChatStore implements ChatStore {
+  constructor(private db: Firestore) {}
+
+  private user(uid: string) {
+    return this.db.collection('users').doc(uid);
+  }
+  async getAssistant(uid: string) {
+    const d = await this.user(uid).collection('meta').doc('assistant').get();
+    return d.exists ? (d.data() as AssistantRecord) : null;
+  }
+  async putAssistant(uid: string, r: AssistantRecord) {
+    await this.user(uid).collection('meta').doc('assistant').set(clean(r));
+  }
+  async getConversation(uid: string, id: string) {
+    const d = await this.user(uid).collection('conversations').doc(id).get();
+    return d.exists ? (d.data() as Conversation) : null;
+  }
+  async putConversation(uid: string, c: Conversation) {
+    await this.user(uid).collection('conversations').doc(c.id).set(clean(c));
+  }
+  async putMessage(uid: string, conversationId: string, m: ChatMessage) {
+    await this.user(uid).collection('conversations').doc(conversationId).collection('messages').doc(m.id).set(clean(m));
+  }
+  async patchMessage(uid: string, conversationId: string, id: string, patch: Partial<ChatMessage>) {
+    await this.user(uid).collection('conversations').doc(conversationId).collection('messages').doc(id).set(clean(patch), { merge: true });
+  }
+  async getMessage(uid: string, conversationId: string, id: string) {
+    const d = await this.user(uid).collection('conversations').doc(conversationId).collection('messages').doc(id).get();
+    return d.exists ? (d.data() as ChatMessage) : null;
+  }
+}
+
+/** Jobs for the Mac helper: users/{uid}/bridge_jobs/{id}; its heartbeat: users/{uid}/meta/bridge. */
+export class FirestoreBridgeStore implements BridgeStore {
+  constructor(private db: Firestore) {}
+
+  async enqueue(uid: string, op: VaultOp, args: BridgeJob['args']) {
+    const ref = this.db.collection('users').doc(uid).collection('bridge_jobs').doc();
+    const job: BridgeJob = { id: ref.id, op, args, status: 'pending', createdAt: Date.now() };
+    await ref.set(clean(job));
+    return ref.id;
+  }
+  async getJob(uid: string, id: string) {
+    const d = await this.db.collection('users').doc(uid).collection('bridge_jobs').doc(id).get();
+    return d.exists ? (d.data() as BridgeJob) : null;
+  }
+  async bridgeInfo(uid: string) {
+    const d = await this.db.collection('users').doc(uid).collection('meta').doc('bridge').get();
+    return d.exists ? (d.data() as BridgeInfo) : null;
   }
 }

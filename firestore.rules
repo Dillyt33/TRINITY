@@ -1,9 +1,36 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Each person can only read and write their own schedule.
-    match /users/{uid}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+    match /users/{uid} {
+      function own() {
+        return request.auth != null && request.auth.uid == uid;
+      }
+
+      // Your calendar, to-dos, check-ins and life log: yours to read and write (app, Mac helper).
+      match /blocks/{id} { allow read, write: if own(); }
+      match /tasks/{id} { allow read, write: if own(); }
+      match /days/{id} { allow read, write: if own(); }
+      match /checkins/{id} { allow read, write: if own(); }
+      match /life/{id} { allow read, write: if own(); }
+
+      // Settings, and the Mac helper's heartbeat. The assistant record is written only by the server.
+      match /meta/{doc} {
+        allow read: if own();
+        allow write: if own() && doc in ['settings', 'bridge'];
+      }
+
+      // Obsidian jobs: the server adds them, the Mac helper (signed in as you) completes them.
+      match /bridge_jobs/{id} { allow read, update: if own(); }
+
+      // Talking to Trinity: you add requests; her replies are written only by the server.
+      match /chat_requests/{id} { allow read, create: if own(); }
+      match /conversations/{cid} {
+        allow read: if own();
+        match /messages/{mid} { allow read: if own(); }
+      }
+
+      // Notification devices and sent markers are managed by the server.
+      match /devices/{id} { allow read: if own(); }
     }
   }
 }

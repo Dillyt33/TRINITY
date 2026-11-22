@@ -6,6 +6,9 @@ import { TrinityOAuthProvider } from './oauth';
 import { createHash } from 'node:crypto';
 import type { Sender } from './reminders';
 import type { OAuthStore, PushStore, ScheduleStore } from './store';
+import type Anthropic from '@anthropic-ai/sdk';
+import { macOnline, type BridgeStore } from './bridge';
+import { setupAssistant, type ChatStore } from './assistant';
 import { buildServer } from './tools';
 
 export interface AppDeps {
@@ -22,6 +25,12 @@ export interface AppDeps {
   publicUrl?: string;
   /** Notifications (step 2). */
   push?: { store: PushStore; publicKey: string; send: () => Sender };
+  /** Obsidian through the Mac helper. */
+  bridge?: BridgeStore;
+  /** Trinity's chat (Claude Managed Agents). `client` is null when no Anthropic API key is set. */
+  assistant?: { chat: ChatStore; client: () => Anthropic | null };
+  /** Signs the person out everywhere (app, Mac helper). */
+  revokeSessions?: (uid: string) => Promise<void>;
 }
 
 export function createApp(deps: AppDeps) {
@@ -80,7 +89,7 @@ export function createApp(deps: AppDeps) {
         res.status(401).json({ error: 'invalid_token' });
         return;
       }
-      const server = buildServer({ store: deps.schedule, uid, defaultTz: deps.defaultTz });
+      const server = buildServer({ store: deps.schedule, uid, defaultTz: deps.defaultTz, bridge: deps.bridge });
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
       res.on('close', () => {
         transport.close().catch(() => undefined);
@@ -182,6 +191,51 @@ export function createApp(deps: AppDeps) {
         if (result === 'gone') await deps.push.store.deleteDevice(user.uid, d.id);
       }
       res.json({ devices: devices.length, delivered: ok });
+    });
+
+    // Trinity's chat: status and one-time setup (creates the agent, its environment and vault at Anthropic).
+    r.get('/api/assistant/status', async (req: Request, res: Response) => {
+      const user = await signedIn(req);
+      if (!user) return void res.status(401).json({ error: 'sign_in_required' });
+      const record = deps.assistant ? await deps.assistant.chat.getAssistant(user.uid) : null;
+      const info = deps.bridge ? await deps.bridge.bridgeInfo(user.uid) : null;
+      res.json({
+        apiKey: !!deps.assistant?.client(),
+        setUp: !!record,
+        bridge: info ? { connected: macOnline(info), lastSeen: info.lastSeen, vaultName: info.vaultName ?? null } : null,
+      });
+    });
+    r.post('/api/assistant/setup', express.json(), async (req: Request, res: Response) => {
+      const user = await signedIn(req);
+      if (!user) return void res.status(401).json({ error: 'sign_in_required' });
+      if (allowed.length && !allowed.includes((user.email ?? '').toLowerCase())) return void res.status(403).json({ error: 'not_allowed' });
+      const client = deps.assistant?.client();
+      if (!deps.assistant || !client) return void res.status(503).json({ error: 'no_api_key' });
+      try {
+        const record = await setupAssistant(
+          {
+            client,
+            chat: deps.assistant.chat,
+            issueAgentToken: (uid) => provider.issueAgentToken(uid),
+            getTz: async (uid) => (await deps.schedule.getSettings(uid)).tz || deps.defaultTz || 'UTC',
+            newId: (p) => p + createHash('sha256').update(String(Math.random()) + Date.now()).digest('hex').slice(0, 16),
+          },
+          user.uid,
+          base,
+        );
+        res.json({ ok: true, agentVersion: record.agentVersion });
+      } catch (e) {
+        console.error('assistant setup failed', e);
+        res.status(500).json({ error: 'setup_failed', message: (e as Error).message });
+      }
+    });
+
+    r.post('/api/account/sign-out-everywhere', express.json(), async (req: Request, res: Response) => {
+      const user = await signedIn(req);
+      if (!user) return void res.status(401).json({ error: 'sign_in_required' });
+      if (!deps.revokeSessions) return void res.status(503).json({ error: 'unavailable' });
+      await deps.revokeSessions(user.uid);
+      res.json({ ok: true });
     });
 
     r.get('/api/health', (_req, res) => {
