@@ -23,7 +23,7 @@ import {
   type Firestore,
 } from 'firebase/firestore';
 import type { AuthUser, Backend, Unsubscribe } from './backend';
-import type { Block, DayMeta, Settings, Task } from './types';
+import type { Block, CheckIn, DayMeta, Settings, Task } from './types';
 
 export interface FirebaseConfig {
   apiKey: string;
@@ -131,5 +131,9 @@ class FirebaseBackend implements Backend {
 
   putSettings(s: Settings) {
     return setDoc(doc(this.db, 'users', this.uid, 'meta', 'settings'), clean(s));
+  }
+
+  putCheckin(c: CheckIn) {
+    return setDoc(doc(this.col('checkins'), c.id), clean(c));
   }
 }

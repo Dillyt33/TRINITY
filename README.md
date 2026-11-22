@@ -1,6 +1,6 @@
 # Project Trinity
 
-Trinity is a personal AI assistant that runs your schedule and keeps you on track. This repo is her home: an installable time-blocking app for iPhone and Mac that syncs between them. Her voice, notifications and phone actions are on the way.
+Trinity is a personal AI assistant that runs your schedule and keeps you on track. You talk to her in Claude; this repo is her home: an installable time-blocking app for iPhone and Mac, the connector that lets Claude change your calendar, and the server that sends reminders and asks how you're doing.
 
 ## What works today (phase 1)
 
@@ -61,9 +61,9 @@ src/
     themes.ts           color schemes
   sw.ts                 service worker (offline; push notifications in phase 2)
 tests/                  unit tests (Vitest)
-functions/              Trinity's server: Claude connector (MCP tools + OAuth sign-in)
+functions/              Trinity's server: Claude connector (MCP tools + OAuth sign-in), reminders and check-ins
 docs/PLAN.md            roadmap and decisions
 docs/SETUP.md           API key, Firebase, deploy, install
 ```
 
-Connect Claude so Trinity can manage the calendar by voice: [docs/CONNECT-CLAUDE.md](docs/CONNECT-CLAUDE.md). Roadmap and build order: [docs/ASSISTANT-PLAN.md](docs/ASSISTANT-PLAN.md). Use Trinity on your iPhone today: [docs/PHONE-SETUP.md](docs/PHONE-SETUP.md).
+Connect Claude so Trinity can manage the calendar by voice: [docs/CONNECT-CLAUDE.md](docs/CONNECT-CLAUDE.md). Reminders and "how are you doing?" check-ins: [docs/REMINDERS.md](docs/REMINDERS.md). Roadmap and build order: [docs/ASSISTANT-PLAN.md](docs/ASSISTANT-PLAN.md). Use Trinity on your iPhone today: [docs/PHONE-SETUP.md](docs/PHONE-SETUP.md).

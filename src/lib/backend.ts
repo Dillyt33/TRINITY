@@ -1,4 +1,4 @@
-import type { Block, DayMeta, Settings, Task } from './types';
+import type { Block, CheckIn, DayMeta, Settings, Task } from './types';
 
 export type Unsubscribe = () => void;
 
@@ -22,6 +22,7 @@ export interface Backend {
   deleteTask(id: string): Promise<void>;
   putDay(d: DayMeta): Promise<void>;
   putSettings(s: Settings): Promise<void>;
+  putCheckin(c: CheckIn): Promise<void>;
 }
 
 type Table<T> = Record<string, T>;
@@ -114,5 +115,11 @@ export class LocalBackend implements Backend {
 
   async putSettings(s: Settings) {
     this.write('settings', s as unknown as Table<unknown>);
+  }
+
+  async putCheckin(c: CheckIn) {
+    const t = this.read<CheckIn>('checkins');
+    t[c.id] = c;
+    this.write('checkins', t);
   }
 }

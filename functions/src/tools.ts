@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { findFreeSlot } from '../../src/lib/layout';
 import { guessCategory, parseQuickAdd } from '../../src/lib/parse';
 import { addDays, clockAp, duration, hhmm, longDate, shortDate, timeRange, weekday } from '../../src/lib/time';
-import { CATEGORY_NAMES, DEFAULT_SETTINGS, type Block, type CategoryId, type Subtask, type Task } from '../../src/lib/types';
+import { CATEGORY_NAMES, DEFAULT_NOTIFY, DEFAULT_SETTINGS, MOOD_LABELS, type Block, type CategoryId, type CheckIn, type Mood, type Subtask, type Task } from '../../src/lib/types';
 import type { ScheduleStore } from './store';
 import { nowIn } from './zone';
 
@@ -395,6 +395,52 @@ export function buildServer(ctx: ToolContext): McpServer {
       } catch (e) {
         return fail((e as Error).message);
       }
+    },
+  );
+
+  server.registerTool(
+    'get_about_me',
+    {
+      title: 'About me and how I have been',
+      description: "The person's own notes for Trinity (goals, weekly targets, usual day, how hard to push) and their recent check-ins (moods, how blocks went). Read this at the start of a conversation.",
+      inputSchema: { days: z.number().int().min(1).max(30).optional().describe('How many days of check-ins. Default 7.') },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ days }) => {
+      const n = await now();
+      const since = addDays(n.date, -((days ?? 7) - 1));
+      const checkins = (await store.listCheckins(uid, since)).sort((a, b) => a.at - b.at);
+      const notify = { ...DEFAULT_NOTIFY, ...n.settings.notify };
+      const lines = [
+        `About me:\n${n.settings.profile?.trim() || '(not filled in yet: they can add it in Trinity → Settings → About you)'}`,
+        '',
+        checkins.length ? `Check-ins since ${shortDate(since)}:` : 'No check-ins recently.',
+        ...checkins.map((c) => {
+          const what = c.kind === 'mood' ? `felt ${c.mood ? MOOD_LABELS[c.mood].toLowerCase() : 'unknown'}` : `“${c.blockTitle ?? 'a block'}”: ${c.outcome}`;
+          return `- ${shortDate(c.date)}${c.moment && c.moment !== 'anytime' ? ` ${c.moment}` : ''}: ${what}${c.note ? ` — “${c.note}”` : ''}`;
+        }),
+        '',
+        `Reminders: ${notify.blockReminders ? `${notify.leadMinutes} min before blocks` : 'off before blocks'}; check-ins after blocks ${notify.checkIns ? 'on' : 'off'}; daily check-ins at ${[notify.morning, notify.midday, notify.evening].filter(Boolean).join(', ') || 'none'}.`,
+      ];
+      return text(lines.join('\n'));
+    },
+  );
+
+  server.registerTool(
+    'log_checkin',
+    {
+      title: 'Log how I am doing',
+      description: 'Record how the person is feeling (when they tell you in conversation), so Trinity remembers it and adjusts.',
+      inputSchema: {
+        mood: z.enum(['great', 'good', 'meh', 'rough']).describe('Their overall state, in their words mapped to one of these.'),
+        note: z.string().max(500).optional().describe('A short note in their words, e.g. "slept badly, low energy".'),
+      },
+    },
+    async ({ mood, note }) => {
+      const n = await now();
+      const c: CheckIn = { id: newId('c'), at: Date.now(), date: n.date, kind: 'mood', moment: 'anytime', mood: mood as Mood, source: 'claude', ...(note ? { note } : {}) };
+      await store.putCheckin(uid, c);
+      return text(`Logged: feeling ${MOOD_LABELS[mood as Mood].toLowerCase()}${note ? ` (“${note}”)` : ''}.`);
     },
   );
 

@@ -1,6 +1,6 @@
 import type { Firestore } from 'firebase-admin/firestore';
-import type { Block, DayMeta, Settings, Task } from '../../src/lib/types';
-import type { OAuthKind, OAuthStore, ScheduleStore } from './store';
+import type { Block, CheckIn, DayMeta, Settings, Task } from '../../src/lib/types';
+import type { OAuthKind, OAuthStore, PushDevice, PushStore, ScheduleStore } from './store';
 
 const clean = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 
@@ -50,6 +50,46 @@ export class FirestoreScheduleStore implements ScheduleStore {
   async getSettings(uid: string) {
     const d = await this.db.collection('users').doc(uid).collection('meta').doc('settings').get();
     return (d.data() ?? {}) as Partial<Settings>;
+  }
+  async listCheckins(uid: string, fromDate: string) {
+    const snap = await this.col(uid, 'checkins').where('date', '>=', fromDate).get();
+    return snap.docs.map((d) => d.data() as CheckIn);
+  }
+  async putCheckin(uid: string, c: CheckIn) {
+    await this.col(uid, 'checkins').doc(c.id).set(clean(c));
+  }
+}
+
+/** Devices live under users/{uid}/devices; push_users lists who has any; sent markers live under users/{uid}/sent. */
+export class FirestorePushStore implements PushStore {
+  constructor(private db: Firestore) {}
+
+  async listPushUsers() {
+    const snap = await this.db.collection('push_users').get();
+    return snap.docs.map((d) => d.id);
+  }
+  async listDevices(uid: string) {
+    const snap = await this.db.collection('users').doc(uid).collection('devices').get();
+    return snap.docs.map((d) => d.data() as PushDevice);
+  }
+  async putDevice(uid: string, d: PushDevice) {
+    await this.db.collection('users').doc(uid).collection('devices').doc(d.id).set(clean(d));
+    await this.db.collection('push_users').doc(uid).set({ updatedAt: Date.now() });
+  }
+  async deleteDevice(uid: string, id: string) {
+    await this.db.collection('users').doc(uid).collection('devices').doc(id).delete();
+    const left = await this.db.collection('users').doc(uid).collection('devices').limit(1).get();
+    if (left.empty) await this.db.collection('push_users').doc(uid).delete();
+  }
+  async markSent(uid: string, key: string) {
+    try {
+      // create() fails if the document exists, so two runs can't both send the same reminder.
+      await this.db.collection('users').doc(uid).collection('sent').doc(key.replace(/\//g, '_')).create({ at: Date.now(), expireAt: new Date(Date.now() + 3 * 24 * 3600 * 1000) });
+      return true;
+    } catch (e) {
+      if ((e as { code?: number }).code === 6) return false; // ALREADY_EXISTS
+      throw e;
+    }
   }
 }
 

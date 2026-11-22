@@ -13,6 +13,7 @@
   import SettingsPanel from './components/SettingsPanel.svelte';
   import SignIn from './components/SignIn.svelte';
   import Connect from './components/Connect.svelte';
+  import CheckIn from './components/CheckIn.svelte';
   import { connectRequestId } from './lib/connector';
   import { app } from './lib/app.svelte';
   import { applyTheme, resolveTheme, THEMES } from './lib/themes';
@@ -39,6 +40,18 @@
 
   onMount(() => {
     app.init();
+    // Opened from a notification?
+    const url = new URL(window.location.href);
+    if (url.pathname === '/checkin') {
+      const kind = url.searchParams.get('kind') === 'block' ? 'block' : 'mood';
+      const moment = url.searchParams.get('moment');
+      app.checkin = { kind, id: url.searchParams.get('id') ?? undefined, moment: (['morning', 'midday', 'evening'].includes(moment ?? '') ? moment : 'anytime') as 'morning' | 'midday' | 'evening' | 'anytime' };
+      history.replaceState(null, '', '/');
+    } else if (url.searchParams.get('block')) {
+      app.goTo(app.today, 'day');
+      app.select(url.searchParams.get('block'));
+      history.replaceState(null, '', '/');
+    }
     const onPhone = () => (phone = mqPhone.matches);
     const onWide = () => (wide = mqWide.matches);
     const onDark = () => (prefersDark = mqDark.matches);
@@ -268,6 +281,9 @@
         <Sidebar inboxOnly />
       </div>
     </Sheet>
+    <Sheet open={!!app.checkin} onclose={() => (app.checkin = null)} label="Check-in">
+      {#if app.checkin}<CheckIn kind={app.checkin.kind} id={app.checkin.id} moment={app.checkin.moment} onclose={() => (app.checkin = null)} />{/if}
+    </Sheet>
     <Sheet open={app.settingsOpen} onclose={() => (app.settingsOpen = false)} label="Settings">
       <SettingsPanel />
     </Sheet>
@@ -361,6 +377,9 @@
       <main class="monthview"><MonthView /></main>
     {/if}
 
+    <Sheet open={!!app.checkin} onclose={() => (app.checkin = null)} label="Check-in">
+      {#if app.checkin}<CheckIn kind={app.checkin.kind} id={app.checkin.id} moment={app.checkin.moment} onclose={() => (app.checkin = null)} />{/if}
+    </Sheet>
     <Sheet open={app.settingsOpen} onclose={() => (app.settingsOpen = false)} label="Settings">
       <SettingsPanel />
     </Sheet>

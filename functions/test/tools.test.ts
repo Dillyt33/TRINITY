@@ -49,7 +49,7 @@ describe('Trinity tools', () => {
     const { client } = await connect(store);
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual(
-      ['add_block', 'add_todo', 'complete_todo', 'delete_block', 'find_free_time', 'get_schedule', 'quick_add', 'schedule_todo', 'set_intention', 'update_block'].sort(),
+      ['add_block', 'add_todo', 'complete_todo', 'delete_block', 'find_free_time', 'get_about_me', 'get_schedule', 'log_checkin', 'quick_add', 'schedule_todo', 'set_intention', 'update_block'].sort(),
     );
     expect(tools.find((t) => t.name === 'delete_block')?.annotations?.destructiveHint).toBe(true);
   });
@@ -105,5 +105,19 @@ describe('Trinity tools', () => {
     expect((await call('get_schedule')).text).toContain('intention: Ship the draft');
     expect((await call('add_block', { title: 'X', start: 'whenever' })).isError).toBe(true);
     expect((await call('update_block', { id: 'nope', done: true })).isError).toBe(true);
+  });
+});
+
+describe('about me and check-ins', () => {
+  it('reads the profile and logs how the person is doing', async () => {
+    const store = new MemoryScheduleStore({ u1: { tz: 'America/New_York', profile: 'Goal: gym 4x a week. Push level 3.' } });
+    const { call } = await connect(store);
+    const empty = await call('get_about_me');
+    expect(empty.text).toContain('Goal: gym 4x a week');
+    expect(empty.text).toContain('No check-ins recently.');
+    const logged = await call('log_checkin', { mood: 'rough', note: 'slept badly' });
+    expect(logged.text).toBe('Logged: feeling rough (“slept badly”).');
+    const after = await call('get_about_me');
+    expect(after.text).toContain('felt rough — “slept badly”');
   });
 });

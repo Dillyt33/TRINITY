@@ -1,4 +1,4 @@
-import type { Block, DayMeta, Settings, Task } from '../../src/lib/types';
+import type { Block, CheckIn, DayMeta, Settings, Task } from '../../src/lib/types';
 
 /** Server-side access to one person's Trinity data (users/{uid}/...). */
 export interface ScheduleStore {
@@ -13,6 +13,26 @@ export interface ScheduleStore {
   getDay(uid: string, date: string): Promise<DayMeta | null>;
   putDay(uid: string, d: DayMeta): Promise<void>;
   getSettings(uid: string): Promise<Partial<Settings>>;
+  listCheckins(uid: string, fromDate: string): Promise<CheckIn[]>;
+  putCheckin(uid: string, c: CheckIn): Promise<void>;
+}
+
+/** A browser that agreed to receive notifications (Web Push subscription). */
+export interface PushDevice {
+  id: string;
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+  label: string;
+  createdAt: number;
+}
+
+export interface PushStore {
+  listPushUsers(): Promise<string[]>;
+  listDevices(uid: string): Promise<PushDevice[]>;
+  putDevice(uid: string, d: PushDevice): Promise<void>;
+  deleteDevice(uid: string, id: string): Promise<void>;
+  /** Records that a notification went out. Returns false if it already had (so it isn't sent twice). */
+  markSent(uid: string, key: string): Promise<boolean>;
 }
 
 export type OAuthKind = 'clients' | 'requests' | 'codes' | 'tokens';
@@ -67,6 +87,40 @@ export class MemoryScheduleStore implements ScheduleStore {
   }
   async getSettings(uid: string) {
     return this.settings[uid] ?? {};
+  }
+  setSettings(uid: string, s: Partial<Settings>) {
+    this.settings[uid] = s;
+  }
+  private checkins = new Map<string, CheckIn[]>();
+  async listCheckins(uid: string, fromDate: string) {
+    return (this.checkins.get(uid) ?? []).filter((c) => c.date >= fromDate);
+  }
+  async putCheckin(uid: string, c: CheckIn) {
+    this.checkins.set(uid, [...(this.checkins.get(uid) ?? []).filter((x) => x.id !== c.id), structuredClone(c)]);
+  }
+}
+
+export class MemoryPushStore implements PushStore {
+  devices = new Map<string, Map<string, PushDevice>>();
+  sent = new Set<string>();
+  async listPushUsers() {
+    return [...this.devices.keys()].filter((u) => this.devices.get(u)!.size > 0);
+  }
+  async listDevices(uid: string) {
+    return [...(this.devices.get(uid)?.values() ?? [])];
+  }
+  async putDevice(uid: string, d: PushDevice) {
+    if (!this.devices.has(uid)) this.devices.set(uid, new Map());
+    this.devices.get(uid)!.set(d.id, d);
+  }
+  async deleteDevice(uid: string, id: string) {
+    this.devices.get(uid)?.delete(id);
+  }
+  async markSent(uid: string, key: string) {
+    const k = `${uid}/${key}`;
+    if (this.sent.has(k)) return false;
+    this.sent.add(k);
+    return true;
   }
 }
 

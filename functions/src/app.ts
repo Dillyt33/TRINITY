@@ -3,7 +3,9 @@ import { getOAuthProtectedResourceMetadataUrl, mcpAuthRouter } from '@modelconte
 import { requireBearerAuth } from '@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { TrinityOAuthProvider } from './oauth';
-import type { OAuthStore, ScheduleStore } from './store';
+import { createHash } from 'node:crypto';
+import type { Sender } from './reminders';
+import type { OAuthStore, PushStore, ScheduleStore } from './store';
 import { buildServer } from './tools';
 
 export interface AppDeps {
@@ -18,6 +20,8 @@ export interface AppDeps {
   appUrl?: string;
   /** Force the public address (tests); otherwise taken from the request. */
   publicUrl?: string;
+  /** Notifications (step 2). */
+  push?: { store: PushStore; publicKey: string; send: () => Sender };
 }
 
 export function createApp(deps: AppDeps) {
@@ -111,7 +115,7 @@ export function createApp(deps: AppDeps) {
       }
       next();
     };
-    r.use('/api/oauth', cors);
+    r.use('/api', cors);
     r.get('/api/oauth/request/:id', async (req: Request, res: Response) => {
       const d = await provider.describeRequest(String(req.params.id));
       if (!d) res.status(404).json({ error: 'expired' });
@@ -136,6 +140,50 @@ export function createApp(deps: AppDeps) {
       if (!redirect) res.status(404).json({ error: 'expired' });
       else res.json({ redirect });
     });
+    // Notifications: the app registers each device that should get reminders.
+    r.get('/api/push/key', (_req: Request, res: Response) => {
+      if (!deps.push?.publicKey) res.status(503).json({ error: 'push_not_configured' });
+      else res.json({ publicKey: deps.push.publicKey });
+    });
+    r.post('/api/push/subscribe', express.json(), async (req: Request, res: Response) => {
+      const user = await signedIn(req);
+      if (!user) return void res.status(401).json({ error: 'sign_in_required' });
+      if (!deps.push) return void res.status(503).json({ error: 'push_not_configured' });
+      const sub = req.body?.subscription;
+      if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) return void res.status(400).json({ error: 'bad_subscription' });
+      const id = createHash('sha256').update(String(sub.endpoint)).digest('hex').slice(0, 24);
+      await deps.push.store.putDevice(user.uid, {
+        id,
+        endpoint: String(sub.endpoint),
+        keys: { p256dh: String(sub.keys.p256dh), auth: String(sub.keys.auth) },
+        label: String(req.body?.label ?? 'Device').slice(0, 80),
+        createdAt: Date.now(),
+      });
+      res.json({ ok: true, id });
+    });
+    r.post('/api/push/unsubscribe', express.json(), async (req: Request, res: Response) => {
+      const user = await signedIn(req);
+      if (!user) return void res.status(401).json({ error: 'sign_in_required' });
+      if (!deps.push) return void res.status(503).json({ error: 'push_not_configured' });
+      const id = createHash('sha256').update(String(req.body?.endpoint ?? '')).digest('hex').slice(0, 24);
+      await deps.push.store.deleteDevice(user.uid, id);
+      res.json({ ok: true });
+    });
+    r.post('/api/push/test', express.json(), async (req: Request, res: Response) => {
+      const user = await signedIn(req);
+      if (!user) return void res.status(401).json({ error: 'sign_in_required' });
+      if (!deps.push) return void res.status(503).json({ error: 'push_not_configured' });
+      const devices = await deps.push.store.listDevices(user.uid);
+      const send = deps.push.send();
+      let ok = 0;
+      for (const d of devices) {
+        const result = await send(d, { title: 'Trinity is set up', body: 'This is how reminders and check-ins will look.', url: '/', tag: 'test' });
+        if (result === 'ok') ok++;
+        if (result === 'gone') await deps.push.store.deleteDevice(user.uid, d.id);
+      }
+      res.json({ devices: devices.length, delivered: ok });
+    });
+
     r.get('/api/health', (_req, res) => {
       res.json({ ok: true, mcp: mcpUrl.href });
     });

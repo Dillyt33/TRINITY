@@ -5,6 +5,14 @@
   import { clockAp } from '../lib/time';
   import type { ThemeSetting } from '../lib/types';
   import { connectorUrl } from '../lib/connector';
+  import ReminderSettings from './ReminderSettings.svelte';
+
+  let profileDraft = $state(app.settings.profile ?? '');
+  let profileTimer: ReturnType<typeof setTimeout> | undefined;
+  $effect(() => {
+    const remote = app.settings.profile ?? '';
+    if (document.activeElement?.id !== 'profile') profileDraft = remote;
+  });
 
   async function copyConnector() {
     try {
@@ -102,12 +110,22 @@
     {/if}
   </section>
 
+  <ReminderSettings />
+
   <section>
-    <div class="label">Reminders</div>
-    <div class="note">
-      <Icon name="bell" size={16} />
-      <span>Coming next: reminders and coach messages on your phone and Mac, even when Trinity is closed.</span>
-    </div>
+    <label class="label" for="profile">About you (Trinity reads this)</label>
+    <textarea
+      id="profile"
+      class="field profile"
+      rows="6"
+      bind:value={profileDraft}
+      oninput={() => {
+        clearTimeout(profileTimer);
+        profileTimer = setTimeout(() => app.setSettings({ profile: profileDraft }), 500);
+      }}
+      placeholder={'Goals right now (and why they matter):\nWeekly targets (e.g. gym 4x, studio 3x):\nMy usual day (wake, work hours, best focus):\nNon-negotiables:\nWhat I tend to put off:\nHow hard to push me (1–5):'}
+    ></textarea>
+    <p class="hint">Trinity uses this in Claude and when she writes your check-ins.</p>
   </section>
 
   <section>
@@ -275,6 +293,16 @@
     font-size: 12.5px;
     overflow-x: auto;
     white-space: nowrap;
+  }
+  .profile {
+    resize: vertical;
+    line-height: 1.5;
+    font-size: 13.5px;
+  }
+  .hint {
+    margin: -2px 0 0;
+    font-size: 12px;
+    color: var(--muted);
   }
   .btns {
     display: flex;

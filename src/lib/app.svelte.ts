@@ -6,7 +6,7 @@ import { findFreeSlot } from './layout';
 import { dayToMarkdown, parseDayMarkdown } from './markdown';
 import type { QuickAdd } from './parse';
 import { addDays, clamp, monthGrid, nowMinutes, shortDate, timeRange, todayIso } from './time';
-import { DEFAULT_SETTINGS, type Block, type CategoryId, type DayMeta, type Settings, type Subtask, type Task } from './types';
+import { DEFAULT_SETTINGS, type Block, type CategoryId, type CheckIn, type DayMeta, type Settings, type Subtask, type Task } from './types';
 
 export type View = 'day' | 'month';
 export type Mode = 'local' | 'firebase';
@@ -40,6 +40,8 @@ class AppState {
   settingsOpen = $state(false);
   quickAddOpen = $state(false);
   focusTitleId = $state<string | null>(null);
+  /** Opened from a notification: /checkin?kind=block&id=… or ?kind=mood&moment=… */
+  checkin = $state<{ kind: 'block' | 'mood'; id?: string; moment?: CheckIn['moment'] } | null>(null);
 
   dayBlocks = $derived(this.blocks.filter((b) => b.date === this.date).sort((a, b) => a.start - b.start || a.end - b.end));
   selected = $derived(this.blocks.find((b) => b.id === this.selectedId) ?? null);
@@ -279,6 +281,11 @@ class AppState {
     this.settings = { ...this.settings, ...patch };
     await this.backend.putSettings($state.snapshot(this.settings) as Settings);
     if (patch.weekStart !== undefined) this.resubscribe();
+  }
+
+  // ---------- check-ins ----------
+  async saveCheckin(c: Omit<CheckIn, 'id' | 'at' | 'date' | 'source'>) {
+    await this.backend.putCheckin({ ...c, id: uid('c'), at: Date.now(), date: this.today, source: 'app' });
   }
 
   // ---------- markdown ----------

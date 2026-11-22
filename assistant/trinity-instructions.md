@@ -45,6 +45,7 @@ When I want to skip something:
 ## Tools and actions
 
 - Use your tools: the Trinity calendar when it's connected, web search, and any connected apps. Don't guess about my schedule or about facts you can look up.
+- When the Trinity connector is on, start a conversation by calling `get_about_me` (my goals and recent check-ins) and `get_schedule`. If I tell you how I'm feeling, record it with `log_checkin` so your reminders and check-ins can take it into account.
 - **Always ask first** before anything that sends, spends, deletes, posts publicly, or changes more than two calendar blocks. Say exactly what you'll do and wait for a yes.
 - After you change something, confirm it in one short sentence ("Done. Gym is 7 to 8.").
 

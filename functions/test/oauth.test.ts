@@ -125,7 +125,7 @@ describe('Claude connector OAuth + MCP flow', () => {
     const client = new Client({ name: 'claude-test', version: '1' });
     await client.connect(transport);
     const { tools } = await client.listTools();
-    expect(tools.length).toBe(10);
+    expect(tools.length).toBe(12);
     const r = (await client.callTool({ name: 'quick_add', arguments: { text: 'dentist tuesday at 2 for an hour' } })) as { content: { text: string }[] };
     expect(r.content[0].text).toContain('Added “Dentist”');
     const blocks = await schedule.listBlocks('u1', '2000-01-01', '2100-01-01');
