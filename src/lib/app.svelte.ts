@@ -56,6 +56,7 @@ class AppState {
   );
 
   private subs: Unsubscribe[] = [];
+  private tzSaved = false;
   private rangeKey = '';
   private toastTimer: ReturnType<typeof setTimeout> | undefined;
   private toastSeq = 0;
@@ -105,7 +106,15 @@ class AppState {
       }),
       b.watchTasks((tasks) => (this.tasks = tasks)),
       b.watchDays(from, to, (days) => (this.days = Object.fromEntries(days.map((d) => [d.date, d])))),
-      b.watchSettings((s) => (this.settings = { ...DEFAULT_SETTINGS, ...s })),
+      b.watchSettings((s) => {
+        this.settings = { ...DEFAULT_SETTINGS, ...s };
+        // Trinity's server (Claude connector, reminders) needs your time zone to know what "today" is.
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        if (b.kind === 'firebase' && tz && this.settings.tz !== tz && !this.tzSaved) {
+          this.tzSaved = true;
+          b.putSettings({ ...this.settings, tz });
+        }
+      }),
     ];
   }
 

@@ -61,8 +61,9 @@ src/
     themes.ts           color schemes
   sw.ts                 service worker (offline; push notifications in phase 2)
 tests/                  unit tests (Vitest)
+functions/              Trinity's server: Claude connector (MCP tools + OAuth sign-in)
 docs/PLAN.md            roadmap and decisions
 docs/SETUP.md           API key, Firebase, deploy, install
 ```
 
-Roadmap and build order: [docs/ASSISTANT-PLAN.md](docs/ASSISTANT-PLAN.md). Use Trinity on your iPhone today: [docs/PHONE-SETUP.md](docs/PHONE-SETUP.md).
+Connect Claude so Trinity can manage the calendar by voice: [docs/CONNECT-CLAUDE.md](docs/CONNECT-CLAUDE.md). Roadmap and build order: [docs/ASSISTANT-PLAN.md](docs/ASSISTANT-PLAN.md). Use Trinity on your iPhone today: [docs/PHONE-SETUP.md](docs/PHONE-SETUP.md).

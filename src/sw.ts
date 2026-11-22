@@ -7,7 +7,12 @@ declare let self: ServiceWorkerGlobalScope;
 // Offline support: cache the app shell.
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
-registerRoute(new NavigationRoute(createHandlerBoundToURL('index.html')));
+// Leave server routes (Claude connector sign-in, MCP, API) to the network.
+registerRoute(
+  new NavigationRoute(createHandlerBoundToURL('index.html'), {
+    denylist: [/^\/(authorize|token|register|revoke|mcp|api)(\/|$|\?)/, /^\/\.well-known\//],
+  }),
+);
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));

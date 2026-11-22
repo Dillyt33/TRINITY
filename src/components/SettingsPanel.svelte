@@ -4,6 +4,16 @@
   import { THEMES, THEME_NAMES } from '../lib/themes';
   import { clockAp } from '../lib/time';
   import type { ThemeSetting } from '../lib/types';
+  import { connectorUrl } from '../lib/connector';
+
+  async function copyConnector() {
+    try {
+      await navigator.clipboard.writeText(connectorUrl());
+      app.flash('Copied the connector address');
+    } catch {
+      app.flash(connectorUrl());
+    }
+  }
 
   let importText = $state('');
   let showImport = $state(false);
@@ -74,6 +84,22 @@
         </select>
       </div>
     </div>
+  </section>
+
+  <section>
+    <div class="label">Talk to Trinity in Claude</div>
+    {#if app.mode === 'firebase'}
+      <div class="note ok">
+        <Icon name="sparkle" size={16} />
+        <span>Connect Claude once, and Trinity can read and change this calendar from the Claude app, including voice and “Hey Siri, Ask Claude”. In Claude: <strong>Settings → Connectors → Add custom connector</strong>, paste this address, then tap Connect and Allow.</span>
+      </div>
+      <div class="conn">
+        <code>{connectorUrl()}</code>
+        <button class="btn" onclick={copyConnector}><Icon name="copy" size={15} />Copy</button>
+      </div>
+    {:else}
+      <div class="note"><Icon name="sparkle" size={16} /><span>Once Trinity is synced through Firebase and deployed (docs/SETUP.md), you can connect Claude here so Trinity can manage this calendar by voice.</span></div>
+    {/if}
   </section>
 
   <section>
@@ -233,6 +259,22 @@
   }
   .note.ok {
     color: var(--text);
+  }
+  .conn {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .conn code {
+    flex: 1;
+    min-width: 0;
+    padding: 9px 11px;
+    border-radius: 10px;
+    background: var(--sunken);
+    font-family: var(--mono);
+    font-size: 12.5px;
+    overflow-x: auto;
+    white-space: nowrap;
   }
   .btns {
     display: flex;

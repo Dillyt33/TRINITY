@@ -1,0 +1,73 @@
+import type { Firestore } from 'firebase-admin/firestore';
+import type { Block, DayMeta, Settings, Task } from '../../src/lib/types';
+import type { OAuthKind, OAuthStore, ScheduleStore } from './store';
+
+const clean = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
+
+/** Same layout the app uses: users/{uid}/blocks|tasks|days, users/{uid}/meta/settings. */
+export class FirestoreScheduleStore implements ScheduleStore {
+  constructor(private db: Firestore) {}
+
+  private col(uid: string, name: string) {
+    return this.db.collection('users').doc(uid).collection(name);
+  }
+
+  async listBlocks(uid: string, from: string, to: string) {
+    const snap = await this.col(uid, 'blocks').where('date', '>=', from).where('date', '<=', to).get();
+    return snap.docs.map((d) => d.data() as Block);
+  }
+  async getBlock(uid: string, id: string) {
+    const d = await this.col(uid, 'blocks').doc(id).get();
+    return d.exists ? (d.data() as Block) : null;
+  }
+  async putBlock(uid: string, b: Block) {
+    await this.col(uid, 'blocks').doc(b.id).set(clean(b));
+  }
+  async deleteBlock(uid: string, id: string) {
+    await this.col(uid, 'blocks').doc(id).delete();
+  }
+  async listTasks(uid: string) {
+    const snap = await this.col(uid, 'tasks').get();
+    return snap.docs.map((d) => d.data() as Task);
+  }
+  async getTask(uid: string, id: string) {
+    const d = await this.col(uid, 'tasks').doc(id).get();
+    return d.exists ? (d.data() as Task) : null;
+  }
+  async putTask(uid: string, t: Task) {
+    await this.col(uid, 'tasks').doc(t.id).set(clean(t));
+  }
+  async deleteTask(uid: string, id: string) {
+    await this.col(uid, 'tasks').doc(id).delete();
+  }
+  async getDay(uid: string, date: string) {
+    const d = await this.col(uid, 'days').doc(date).get();
+    return d.exists ? (d.data() as DayMeta) : null;
+  }
+  async putDay(uid: string, day: DayMeta) {
+    await this.col(uid, 'days').doc(day.date).set(clean(day));
+  }
+  async getSettings(uid: string) {
+    const d = await this.db.collection('users').doc(uid).collection('meta').doc('settings').get();
+    return (d.data() ?? {}) as Partial<Settings>;
+  }
+}
+
+/** OAuth records live in top-level oauth_* collections that the app's security rules don't expose. */
+export class FirestoreOAuthStore implements OAuthStore {
+  constructor(private db: Firestore) {}
+
+  private ref(kind: OAuthKind, id: string) {
+    return this.db.collection(`oauth_${kind}`).doc(id);
+  }
+  async get<T>(kind: OAuthKind, id: string) {
+    const d = await this.ref(kind, id).get();
+    return d.exists ? (d.data() as T) : null;
+  }
+  async put<T extends object>(kind: OAuthKind, id: string, value: T) {
+    await this.ref(kind, id).set(clean(value));
+  }
+  async delete(kind: OAuthKind, id: string) {
+    await this.ref(kind, id).delete();
+  }
+}

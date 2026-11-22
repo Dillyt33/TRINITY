@@ -12,6 +12,8 @@
   import Toast from './components/Toast.svelte';
   import SettingsPanel from './components/SettingsPanel.svelte';
   import SignIn from './components/SignIn.svelte';
+  import Connect from './components/Connect.svelte';
+  import { connectRequestId } from './lib/connector';
   import { app } from './lib/app.svelte';
   import { applyTheme, resolveTheme, THEMES } from './lib/themes';
   import { addDays, addMonths, duration, fromIso, longDate, monthTitle, weekOf, WEEKDAYS, MONTHS } from './lib/time';
@@ -137,7 +139,8 @@
       : app.settings.dayStart,
   );
   const hiddenEarlier = $derived(app.dayBlocks.filter((b) => b.end <= phoneStart).length);
-  const showSignIn = $derived(app.mode === 'firebase' && app.authReady && !app.user && !app.localOnly);
+  const connectId = connectRequestId();
+  const showSignIn = $derived(app.mode === 'firebase' && app.authReady && !app.user && (!app.localOnly || !!connectId));
 </script>
 
 <svelte:window onkeydown={onKey} />
@@ -146,6 +149,8 @@
   <div class="splash"><Logo size={48} /></div>
 {:else if showSignIn}
   <SignIn />
+{:else if connectId}
+  <Connect requestId={connectId} />
 {:else if phone}
   <!-- ================= iPhone layout ================= -->
   <div class="phone">

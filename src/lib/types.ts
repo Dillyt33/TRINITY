@@ -61,6 +61,7 @@ export interface Settings {
   dayStart: number; // minutes, first hour shown
   dayEnd: number; // minutes, last hour shown
   snap: number; // minutes
+  tz?: string; // IANA time zone, saved by the app so the server knows what "today" is
 }
 
 export const DEFAULT_SETTINGS: Settings = {

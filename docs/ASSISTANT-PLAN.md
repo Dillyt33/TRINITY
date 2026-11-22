@@ -25,7 +25,7 @@ Her personality and rules live in one place, [`assistant/trinity-instructions.md
 | Step | What you get | Who does it |
 |---|---|---|
 | **0. Today** | Trinity in the Claude app on your phone. Paste her instructions, put "Ask Claude" on the Action button, talk to her. She can plan your day and give it to you in Trinity format to paste into the app | You, about 10 min ([PHONE-SETUP.md](PHONE-SETUP.md)) |
-| **1. Trinity's tools** (connector) | She can read and change the Trinity calendar herself, by voice, from the Claude app: "Move gym to 7. What's left today?" | Me. Needs your Firebase project |
+| **1. Trinity's tools** (connector) | She can read and change the Trinity calendar herself, by voice, from the Claude app: "Move gym to 7. What's left today?" | **Built.** You deploy it: [CONNECT-CLAUDE.md](CONNECT-CLAUDE.md). Needs Firebase on the Blaze plan |
 | **2. Notifications** | Reminders before and after each block, and Trinity reaching out (morning plan, "you're behind, here's a fix") on your lock screen, even when apps are closed | Me. Needs Firebase on the Blaze plan |
 | **3. Talk to Trinity inside the Trinity app** | Voice and text inside the app, her female voice, same tools plus web search. Every door is now one app | Me. Needs an Anthropic API key |
 | **4. iPhone actions** | Shortcuts she can trigger: Focus on/off, timers, text someone (asks first), music, Reminders, Home | Me (I write them), you (one-time import) |
@@ -70,7 +70,7 @@ Her personality and rules live in one place, [`assistant/trinity-instructions.md
 |---|---|
 | Claude Pro (you have it) | Covers the Claude app, voice, Cowork/Dispatch and Claude Code |
 | Claude API (step 3 onward) | About $5–15/mo |
-| Firebase | Free for step 1; Blaze plan, about $0–1/mo, from step 2 |
+| Firebase | Blaze plan (card on file) from step 1, about $0–1/mo |
 
 ## Sources
 

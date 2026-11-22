@@ -69,6 +69,11 @@ export class FirebaseSession {
     else await signInWithPopup(this.auth, provider);
   }
 
+  /** Proves who is signed in to Trinity's server (used when connecting Claude). */
+  async idToken(): Promise<string | null> {
+    return (await this.auth.currentUser?.getIdToken()) ?? null;
+  }
+
   signOut(): Promise<void> {
     return fbSignOut(this.auth);
   }

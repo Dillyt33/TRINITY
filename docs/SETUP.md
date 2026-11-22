@@ -25,9 +25,9 @@ Keep the key private. Don't paste it into chats, emails, or the code. In phase 4
 
 ## 2. Create the Firebase project
 
-Firebase is Google's app backend. Trinity uses it for Google sign-in and to sync your schedule between devices. **Phase 1 works on the free Spark plan, so you don't need a card yet.** Reminders and the coach (phases 2 and 4) run small server functions, and those need the pay-as-you-go **Blaze** plan. At your usage that should cost about $0–1 a month.
+Firebase is Google's app backend. Trinity uses it for Google sign-in and to sync your schedule between devices. The app on its own works on the free Spark plan. Trinity's server — the Claude connector ([CONNECT-CLAUDE.md](CONNECT-CLAUDE.md)) and, later, reminders — needs the pay-as-you-go **Blaze** plan, because Firebase only runs server code there. At your usage that should cost about $0–1 a month.
 
-1. Go to **https://console.firebase.google.com** and click **Create a project**. Name it `trinity`. You can turn Google Analytics off.
+1. Go to **https://console.firebase.google.com** and click **Create a project**. Name it `trinity`. You can turn Google Analytics off. Note the **Project ID** in Project settings → General (looks like `trinity-4f2a1`); the long number shown there is the project *number*, which you won't need.
 2. **Sign-in:** go to **Build → Authentication → Get started → Sign-in method**. Turn on **Google**, choose your support email, and click **Save**.
 3. **Database:** go to **Build → Firestore Database → Create database**. Choose **production mode** and the location closest to you (for example `nam5 (United States)`).
 4. **Web app:** go to **Project settings** (the gear icon) **→ General → Your apps** and click the **`</>`** (Web) button. Name it `Trinity` and tick **Also set up Firebase Hosting**. Firebase shows a `firebaseConfig` block. Keep that tab open.
