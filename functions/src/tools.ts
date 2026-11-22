@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { findFreeSlot } from '../../src/lib/layout';
 import { guessCategory, parseQuickAdd } from '../../src/lib/parse';
 import { addDays, clockAp, duration, hhmm, longDate, shortDate, timeRange, weekday } from '../../src/lib/time';
-import { CATEGORY_NAMES, DEFAULT_NOTIFY, DEFAULT_SETTINGS, MOOD_LABELS, type Block, type CategoryId, type CheckIn, type Mood, type Subtask, type Task } from '../../src/lib/types';
+import { CATEGORY_NAMES, DEFAULT_NOTIFY, DEFAULT_SETTINGS, LIFE_AREAS, MOOD_LABELS, type Block, type CategoryId, type CheckIn, type LifeArea, type LifeEntry, type Mood, type Subtask, type Task } from '../../src/lib/types';
 import type { ScheduleStore } from './store';
 import { nowIn } from './zone';
 
@@ -441,6 +441,124 @@ export function buildServer(ctx: ToolContext): McpServer {
       const c: CheckIn = { id: newId('c'), at: Date.now(), date: n.date, kind: 'mood', moment: 'anytime', mood: mood as Mood, source: 'claude', ...(note ? { note } : {}) };
       await store.putCheckin(uid, c);
       return text(`Logged: feeling ${MOOD_LABELS[mood as Mood].toLowerCase()}${note ? ` (“${note}”)` : ''}.`);
+    },
+  );
+
+  const AREA = z.enum(['sleep', 'food', 'exercise', 'mood', 'study', 'project', 'money', 'health', 'mind']);
+  const scale = z.number().int().min(1).max(5);
+
+  server.registerTool(
+    'log_life',
+    {
+      title: 'Record something about my life',
+      description:
+        'Log sleep, food, exercise, mood, study, projects, money, health or mental health whenever the person mentions it ' +
+        '("slept 6 hours", "had a burrito", "ran 3 miles", "spent $40 on groceries", "studied chemistry for an hour", "anxious today"). ' +
+        'One entry per thing. Fill the numbers you can reasonably infer; put everything in summary too. ' +
+        'For food, estimate calories and protein if they did not say. For money, amount is positive when spent and negative when earned.',
+      inputSchema: {
+        area: AREA,
+        summary: z.string().min(1).max(500).describe('Plain words, as they said it.'),
+        date: DATE.optional().describe('The day it is about. Defaults to today.'),
+        hours: z.number().min(0).max(24).optional(),
+        minutes: z.number().int().min(0).max(1440).optional(),
+        quality: scale.optional().describe('1 (bad) to 5 (great), e.g. sleep quality.'),
+        calories: z.number().int().min(0).max(10000).optional(),
+        protein_g: z.number().min(0).max(500).optional(),
+        amount: z.number().min(-1_000_000).max(1_000_000).optional(),
+        mood: scale.optional(),
+        energy: scale.optional(),
+        stress: scale.optional(),
+        project: z.string().max(120).optional(),
+        kind: z.string().max(60).optional().describe('Short type, e.g. "run", "lunch", "groceries", "therapy".'),
+      },
+    },
+    async (a) => {
+      const n = await now();
+      try {
+        const date = resolveDate(a.date, n.date);
+        const data: NonNullable<LifeEntry['data']> = {};
+        for (const k of ['hours', 'minutes', 'quality', 'calories', 'protein_g', 'amount', 'mood', 'energy', 'stress', 'project', 'kind'] as const) {
+          if (a[k] !== undefined) (data as Record<string, unknown>)[k] = a[k];
+        }
+        const e: LifeEntry = { id: newId('l'), at: Date.now(), date, area: a.area as LifeArea, summary: a.summary.trim(), source: 'claude', ...(Object.keys(data).length ? { data } : {}) };
+        await store.putLife(uid, e);
+        return text(`Logged ${LIFE_AREAS[e.area].toLowerCase()} for ${shortDate(date)}: ${e.summary} [id: ${e.id}]`);
+      } catch (err) {
+        return fail((err as Error).message);
+      }
+    },
+  );
+
+  server.registerTool(
+    'get_life_log',
+    {
+      title: 'Read my life log',
+      description:
+        'Entries and per-day totals for sleep, food, exercise, mood, study, projects, money, health and mental health, plus finished calendar time. ' +
+        'Use it to spot patterns and to answer "how have I been sleeping?" or "what did I spend this week?".',
+      inputSchema: {
+        days: z.number().int().min(1).max(90).optional().describe('How many days back from today. Default 7.'),
+        area: AREA.optional().describe('Only this area.'),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ days, area }) => {
+      const n = await now();
+      const count = days ?? 7;
+      const from = addDays(n.date, -(count - 1));
+      const entries = (await store.listLife(uid, from, n.date))
+        .filter((e) => !area || e.area === area)
+        .sort((a, b) => a.date.localeCompare(b.date) || a.at - b.at);
+      const checkins = area && area !== 'mood' ? [] : await store.listCheckins(uid, from);
+      const blocks = area ? [] : await store.listBlocks(uid, from, n.date);
+      const moodScore: Record<Mood, number> = { great: 5, good: 4, meh: 2.5, rough: 1 };
+      const out: string[] = [`Life log, ${shortDate(from)} – ${shortDate(n.date)}${area ? ` (${LIFE_AREAS[area as LifeArea]})` : ''}:`];
+      for (let i = 0; i < count; i++) {
+        const d = addDays(from, i);
+        const es = entries.filter((e) => e.date === d);
+        const cs = checkins.filter((c) => c.date === d && c.kind === 'mood' && c.mood);
+        const done = blocks.filter((b) => b.date === d && b.done && b.cat !== 'break');
+        if (!es.length && !cs.length && !done.length) continue;
+        const sum = (f: (e: LifeEntry) => number | undefined, ar: LifeArea) => es.filter((e) => e.area === ar).reduce((s, e) => s + (f(e) ?? 0), 0);
+        const totals: string[] = [];
+        const sleep = sum((e) => e.data?.hours, 'sleep');
+        if (sleep) totals.push(`sleep ${sleep}h`);
+        const ex = sum((e) => e.data?.minutes, 'exercise');
+        if (ex) totals.push(`exercise ${ex} min`);
+        const kcal = sum((e) => e.data?.calories, 'food');
+        if (kcal) totals.push(`~${kcal} kcal`);
+        const study = sum((e) => e.data?.minutes ?? (e.data?.hours ? e.data.hours * 60 : undefined), 'study');
+        if (study) totals.push(`study ${duration(Math.round(study))}`);
+        const money = sum((e) => e.data?.amount, 'money');
+        if (money) totals.push(money > 0 ? `spent $${money.toFixed(2)}` : `net +$${(-money).toFixed(2)}`);
+        const moods = [...es.filter((e) => e.data?.mood).map((e) => e.data!.mood!), ...cs.map((c) => moodScore[c.mood!])];
+        if (moods.length) totals.push(`mood ${(moods.reduce((x, y) => x + y, 0) / moods.length).toFixed(1)}/5`);
+        if (done.length) totals.push(`calendar: ${done.length} blocks done (${duration(done.reduce((s, b) => s + b.end - b.start, 0))})`);
+        out.push('', `${shortDate(d)}${totals.length ? ` — ${totals.join(' · ')}` : ''}`);
+        for (const e of es) out.push(`- ${LIFE_AREAS[e.area]}: ${e.summary} [id: ${e.id}]`);
+        for (const c of cs) out.push(`- Check-in: felt ${MOOD_LABELS[c.mood!].toLowerCase()}${c.note ? ` — “${c.note}”` : ''}`);
+      }
+      if (out.length === 1) out.push('Nothing logged yet.');
+      return text(out.join('\n'));
+    },
+  );
+
+  server.registerTool(
+    'delete_life_entry',
+    {
+      title: 'Remove a life-log entry',
+      description: 'Remove a wrong or duplicate life-log entry by id.',
+      inputSchema: { id: z.string() },
+      annotations: { destructiveHint: true },
+    },
+    async ({ id }) => {
+      const n = await now();
+      const all = await store.listLife(uid, addDays(n.date, -365), addDays(n.date, 1));
+      const e = all.find((x) => x.id === id);
+      if (!e) return fail(`No life-log entry with id ${id}.`);
+      await store.deleteLife(uid, id);
+      return text(`Removed: ${e.summary}`);
     },
   );
 

@@ -1,4 +1,4 @@
-import type { Block, CheckIn, DayMeta, Settings, Task } from '../../src/lib/types';
+import type { Block, CheckIn, DayMeta, LifeEntry, Settings, Task } from '../../src/lib/types';
 
 /** Server-side access to one person's Trinity data (users/{uid}/...). */
 export interface ScheduleStore {
@@ -15,6 +15,9 @@ export interface ScheduleStore {
   getSettings(uid: string): Promise<Partial<Settings>>;
   listCheckins(uid: string, fromDate: string): Promise<CheckIn[]>;
   putCheckin(uid: string, c: CheckIn): Promise<void>;
+  listLife(uid: string, fromDate: string, toDate: string): Promise<LifeEntry[]>;
+  putLife(uid: string, e: LifeEntry): Promise<void>;
+  deleteLife(uid: string, id: string): Promise<void>;
 }
 
 /** A browser that agreed to receive notifications (Web Push subscription). */
@@ -97,6 +100,16 @@ export class MemoryScheduleStore implements ScheduleStore {
   }
   async putCheckin(uid: string, c: CheckIn) {
     this.checkins.set(uid, [...(this.checkins.get(uid) ?? []).filter((x) => x.id !== c.id), structuredClone(c)]);
+  }
+  private life = new Map<string, LifeEntry[]>();
+  async listLife(uid: string, fromDate: string, toDate: string) {
+    return (this.life.get(uid) ?? []).filter((e) => e.date >= fromDate && e.date <= toDate);
+  }
+  async putLife(uid: string, e: LifeEntry) {
+    this.life.set(uid, [...(this.life.get(uid) ?? []).filter((x) => x.id !== e.id), structuredClone(e)]);
+  }
+  async deleteLife(uid: string, id: string) {
+    this.life.set(uid, (this.life.get(uid) ?? []).filter((x) => x.id !== id));
   }
 }
 

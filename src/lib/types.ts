@@ -89,6 +89,43 @@ export const DEFAULT_NOTIFY: NotifySettings = {
   quietEnd: '07:00',
 };
 
+export type LifeArea = 'sleep' | 'food' | 'exercise' | 'mood' | 'study' | 'project' | 'money' | 'health' | 'mind';
+
+export const LIFE_AREAS: Record<LifeArea, string> = {
+  sleep: 'Sleep',
+  food: 'Diet',
+  exercise: 'Exercise',
+  mood: 'Mood',
+  study: 'Study',
+  project: 'Projects',
+  money: 'Finance',
+  health: 'Health',
+  mind: 'Mental health',
+};
+
+/** One thing Trinity recorded about your life ("slept 6h, woke twice", "spent $42 on groceries"). */
+export interface LifeEntry {
+  id: string;
+  at: number; // ms
+  date: string; // local YYYY-MM-DD the entry is about
+  area: LifeArea;
+  summary: string; // in plain words
+  data?: {
+    hours?: number;
+    minutes?: number;
+    quality?: number; // 1–5
+    calories?: number;
+    protein_g?: number;
+    amount?: number; // money: positive = spent, negative = earned
+    mood?: number; // 1–5
+    energy?: number; // 1–5
+    stress?: number; // 1–5
+    project?: string;
+    kind?: string; // e.g. "run", "lunch", "groceries", "therapy"
+  };
+  source: 'claude' | 'app' | 'health' | 'shortcut';
+}
+
 export type Mood = 'great' | 'good' | 'meh' | 'rough';
 export const MOOD_LABELS: Record<Mood, string> = { great: 'Great', good: 'Good', meh: 'Meh', rough: 'Rough' };
 

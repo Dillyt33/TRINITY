@@ -49,7 +49,7 @@ describe('Trinity tools', () => {
     const { client } = await connect(store);
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual(
-      ['add_block', 'add_todo', 'complete_todo', 'delete_block', 'find_free_time', 'get_about_me', 'get_schedule', 'log_checkin', 'quick_add', 'schedule_todo', 'set_intention', 'update_block'].sort(),
+      ['add_block', 'add_todo', 'complete_todo', 'delete_block', 'delete_life_entry', 'find_free_time', 'get_about_me', 'get_life_log', 'get_schedule', 'log_checkin', 'log_life', 'quick_add', 'schedule_todo', 'set_intention', 'update_block'].sort(),
     );
     expect(tools.find((t) => t.name === 'delete_block')?.annotations?.destructiveHint).toBe(true);
   });

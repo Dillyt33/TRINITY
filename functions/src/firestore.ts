@@ -1,5 +1,5 @@
 import type { Firestore } from 'firebase-admin/firestore';
-import type { Block, CheckIn, DayMeta, Settings, Task } from '../../src/lib/types';
+import type { Block, CheckIn, DayMeta, LifeEntry, Settings, Task } from '../../src/lib/types';
 import type { OAuthKind, OAuthStore, PushDevice, PushStore, ScheduleStore } from './store';
 
 const clean = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
@@ -57,6 +57,16 @@ export class FirestoreScheduleStore implements ScheduleStore {
   }
   async putCheckin(uid: string, c: CheckIn) {
     await this.col(uid, 'checkins').doc(c.id).set(clean(c));
+  }
+  async listLife(uid: string, fromDate: string, toDate: string) {
+    const snap = await this.col(uid, 'life').where('date', '>=', fromDate).where('date', '<=', toDate).get();
+    return snap.docs.map((d) => d.data() as LifeEntry);
+  }
+  async putLife(uid: string, e: LifeEntry) {
+    await this.col(uid, 'life').doc(e.id).set(clean(e));
+  }
+  async deleteLife(uid: string, id: string) {
+    await this.col(uid, 'life').doc(id).delete();
   }
 }
 
